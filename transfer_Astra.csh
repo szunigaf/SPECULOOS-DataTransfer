@@ -64,20 +64,20 @@ if ("$1" == "") then
         endif
     
 	    echo "The images are:"
-        ls $acp_local_path/$date/*fits
+        find $acp_local_path/$date -maxdepth 1 -name "*fits" -type f
         set listsci=$data_dir/$date/filessci.dat
-	    ls $acp_local_path/$date/*fits > $listsci
+	    find $acp_local_path/$date -maxdepth 1 -name "*fits" -type f > $listsci
         set countsci=`wc -l < "$listsci"`
 	    echo ""
     	
 	    echo "Copying the images to the Hub"
-	    cp $acp_local_path/$date/*fits $data_dir/$date/
+	    find $acp_local_path/$date -maxdepth 1 -name "*fits" -type f -exec cp {} $data_dir/$date/ \;
 	    echo ""
 	
         # Making a list of the images copied to the Hub
         set filelist=$data_dir/$date/infiles.dat
         echo " Making a list of the images copied to the Hub (infiles.dat)"
-        ls $data_dir/$date/*fits > $filelist
+        find $data_dir/$date -maxdepth 1 -name "*fits" -type f > $filelist
         set countcopy=`wc -l < "$filelist"`
         set diffcopy=`expr $countsci - $countcopy`
         if ($diffcopy != 0) then
@@ -95,7 +95,7 @@ if ("$1" == "") then
 
 	    echo " Making a list of the solved images (infiles_solved.dat)"
 	    set filelist2=$data_dir/$date/infiles_solved.dat
-	    ls $data_dir/$date/*fits > $filelist2
+	    find $data_dir/$date -maxdepth 1 -name "*fits" -type f > $filelist2
 	    echo ""
 
 	    echo "Running headerfix.py..."
@@ -116,7 +116,7 @@ if ("$1" == "") then
 
 	    echo " Making a list of the final transferred files (list in the $log_dir/$date folder)"
 	    set filelist3=$log_dir/$date/transferred
-	    ls $data_dir/$date/SPECULOOS*fits | xargs -n 1 basename > $filelist3
+	    find $data_dir/$date -maxdepth 1 -name "SPECULOOS*fits" -type f -exec basename {} \; > $filelist3
 	    echo ""
 
 	    echo " Logging the number of transferred files into the global log file ($log_dir/transfer_log.txt) "
@@ -133,7 +133,7 @@ if ("$1" == "") then
 
 	    echo " Making a list of the non-transferred files if any (list in the $log_dir/$date folder) "
 	    set filelist4=$log_dir/$date/non_transferred
-	    ls $data_dir/$date/*fits | xargs -n 1 basename > $filelist4
+	    find $data_dir/$date -maxdepth 1 -name "*fits" -type f -exec basename {} \; > $filelist4
 	    set num_bad_files=`wc -l < "$filelist4"`
 	    if ($num_bad_files != 0) then
 	        python ~/ESO_data_transfer/Callisto_Astra/mail_alert.py $telescope_name $num_bad_files
@@ -181,20 +181,20 @@ else
         endif
 
         echo "The images are:"
-        ls $acp_local_path/$date/*fits
+        find $acp_local_path/$date -maxdepth 1 -name "*fits" -type f
         set listsci=$data_dir/$date/filessci.dat
-        ls $acp_local_path/$date/*fits > $listsci
+        find $acp_local_path/$date -maxdepth 1 -name "*fits" -type f > $listsci
         set countsci=`wc -l < "$listsci"`
         echo ""
         
         echo "Copying the images to the Hub"
-        cp $acp_local_path/$date/*fits $data_dir/$date/
+        find $acp_local_path/$date -maxdepth 1 -name "*fits" -type f -exec cp {} $data_dir/$date/ \;
         echo ""
     
         # Making a list of the images copied to the Hub
         set filelist=$data_dir/$date/infiles.dat
         echo " Making a list of the images copied to the Hub (infiles.dat)"
-        ls $data_dir/$date/*fits > $filelist
+        find $data_dir/$date -maxdepth 1 -name "*fits" -type f > $filelist
         set countcopy=`wc -l < "$filelist"`
         set diffcopy=`expr $countsci - $countcopy`
         if ($diffcopy != 0) then
@@ -211,7 +211,7 @@ else
 
 	    echo " Making a list of the solved images (infiles_solved.dat)"
 	    set filelist2=$data_dir/$date/infiles_solved.dat
-	    ls $data_dir/$date/*fits > $filelist2
+	    find $data_dir/$date -maxdepth 1 -name "*fits" -type f > $filelist2
 	    echo ""
 
 	    echo "Running headerfix.py..."
@@ -232,7 +232,7 @@ else
 
 	    echo " Making a list of the final transferred files (list in the $log_dir/$date folder)"
 	    set filelist3=$log_dir/$date/transferred
-	    ls $data_dir/$date/SPECULOOS*fits | xargs -n 1 basename > $filelist3
+	    find $data_dir/$date -maxdepth 1 -name "SPECULOOS*fits" -type f -exec basename {} \; > $filelist3
 	    echo ""
 
 	    echo " Logging the number of transferred files into the global log file ($log_dir/transfer_log.txt) "
@@ -249,7 +249,7 @@ else
 
 	    echo " Making a list of the non-transferred files if any (list in the $log_dir/$date folder) "
 	    set filelist4=$log_dir/$date/non_transferred
-	    ls $data_dir/$date/*fits | xargs -n 1 basename > $filelist4
+	    find $data_dir/$date -maxdepth 1 -name "*fits" -type f -exec basename {} \; > $filelist4
 	    set num_bad_files=`wc -l < "$filelist4"`
 	    if ($num_bad_files != 0) then
 		    python ~/ESO_data_transfer/Callisto_Astra/mail_alert.py $telescope_name $num_bad_files
