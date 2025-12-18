@@ -128,7 +128,7 @@ if ("$1" == "") then
         sshpass -p 'eij7iaXi' scp $logfile $appcg_path
 	
 	    echo " Transferring the files to ESO directory "
-	    mv $data_dir/$date/SPECULOOS*fits $eso_dir/.
+	    find $data_dir/$date -maxdepth 1 -name "SPECULOOS*fits" -type f -exec mv {} $eso_dir/. \;
 	    echo ""
 
 	    echo " Making a list of the non-transferred files if any (list in the $log_dir/$date folder) "
@@ -244,7 +244,7 @@ else
         #sshpass -p 'eij7iaXi' scp $logfile $appcg_path
 
 	    echo " Transferring the files to ESO directory "
-	    mv $data_dir/$date/SPECULOOS*fits $eso_dir/.
+	    find $data_dir/$date -maxdepth 1 -name "SPECULOOS*fits" -type f -exec mv {} $eso_dir/. \;
 	    echo ""
 
 	    echo " Making a list of the non-transferred files if any (list in the $log_dir/$date folder) "
