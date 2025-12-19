@@ -16,8 +16,21 @@ inlist = str(sys.argv[1])
 
 def solve_astrometry(filenameold):
     #images have to be fits not fts (otherwise astrometry solving doesn't work)
-    filename=filenameold.replace('.fts','.fits')
-    os.rename(filenameold,filename)
+    
+    # Check if file exists first
+    if not os.path.exists(filenameold):
+        print("Warning: File not found: " + filenameold)
+        return
+    
+    # Only rename if it has .fts extension
+    if filenameold.endswith('.fts'):
+        filename = filenameold.replace('.fts', '.fits')
+        try:
+            os.rename(filenameold, filename)
+            print("Renamed: " + filenameold + " -> " + filename)
+        except OSError as e:
+            print("Error renaming file " + filenameold + ": " + str(e))
+    # If it's already .fits, no action needed
 #    filenameb=filename
 #    with fits.open(filename) as infile_init:
 #        if infile_init[0].header['IMAGETYP'] == 'Light Frame':
