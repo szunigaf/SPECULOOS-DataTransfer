@@ -30,7 +30,7 @@ def solve_astrometry(filenameold):
             print("Renamed: " + filenameold + " -> " + filename)
         except OSError as e:
             print("Error renaming file " + filenameold + ": " + str(e))
-    # If it's already .fits, no action needed
+    # Files with .fits extension or other extensions are left unchanged
 #    filenameb=filename
 #    with fits.open(filename) as infile_init:
 #        if infile_init[0].header['IMAGETYP'] == 'Light Frame':
