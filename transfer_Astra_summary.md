@@ -70,7 +70,7 @@ Python: astrometry_spirit.py
 - Uses multiprocessing for parallel execution
 - Creates list: `infiles_solved.dat`
 
-**Note:** The actual astrometric solving code is commented out in the current version
+**Note:** The actual astrometric solving code is commented out in the current version. The astrometry_spirit.py script only performs file renaming (.fts → .fits) to ensure compatibility. The full astrometry solving functionality (using solve-field) appears to be disabled, likely because WCS information is already present in the raw files or is added at a different stage in the pipeline. This does not impact the pipeline's ability to process and transfer data to ESO.
 
 ### 6. **Header Fixing & Standardization**
 ```
