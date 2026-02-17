@@ -1,28 +1,32 @@
 #!/bin/csh
 setenv PATH $PATH\:/opt/local/bin\:/opt/local/sbin\:/usr/local/bin\:/usr/bin\:/bin\:/usr/sbin\:/sbin\:/opt/X11/bin\:/Library/TeX/texbin
 
-# Telescope name (options are Io, Europa, Ganymede, Callisto)
-set telescope_name="Callisto"
+# Load credentials from external file
+if (-f ~/.credentials.csh) then
+    source ~/.credentials.csh
+else if (-f `dirname $0`/.credentials.csh) then
+    source `dirname $0`/.credentials.csh
+else
+    echo "ERROR: Credentials file not found!"
+    echo "Please copy .credentials.csh.example to .credentials.csh and configure it."
+    echo "Expected locations: ~/.credentials.csh or script_directory/.credentials.csh"
+    exit 1
+endif
 
-# Path to the directory at Windows control PC where raw data are stored
-set acp_control_pc_path="//speculoos:c0ntrolPC-04@172.16.0.202/Documents/astra/images/"
+# Validate required environment variables
+if (! $?TELESCOPE_NAME) then
+    echo "ERROR: TELESCOPE_NAME not set in credentials file!"
+    exit 1
+endif
 
-# Mounting point of the Windows control PC directory on the Hub
-set acp_local_path="~/ESO_data_transfer/Callisto_Astra/Astra_mount"
-#set acp_local_path="~/ESO_data_transfer/Callisto_Astra/Astra_mount_test"
-
-# Data folder on the Hub for temporary data storage (work directory)
-set data_dir="~/ESO_data_transfer/Callisto_Astra/workdir"
-
-# Log folder on the Hub
-set log_dir="~/ESO_data_transfer/Callisto_Astra/Logs"
-
-# Folder on the Hub where ESO will grab the formatted data
-set eso_dir="/home/eso/data_transfer/callisto"
-#set eso_dir="~/ESO_data_transfer/Callisto_Astra/test"
-
-# Folder on Cambridge server where to write the global log file
-set appcg_path="speculoos@appcs.ra.phy.cam.ac.uk:/appct/data/SPECULOOSPipeline/Observations/Callisto/."
+# Set variables from environment (loaded from .credentials.csh)
+set telescope_name="${TELESCOPE_NAME}"
+set acp_control_pc_path="//${CONTROL_PC_USER}:${CONTROL_PC_PASSWORD}@${CONTROL_PC_IP}${CONTROL_PC_PATH}"
+set acp_local_path="${ACP_LOCAL_PATH}"
+set data_dir="${DATA_DIR}"
+set log_dir="${LOG_DIR}"
+set eso_dir="${ESO_DIR}"
+set appcg_path="${CAMBRIDGE_SERVER_USER}@${CAMBRIDGE_SERVER_HOST}:${CAMBRIDGE_SERVER_PATH}"
 
 echo ""
 echo "********************************************"
@@ -82,14 +86,14 @@ if ("$1" == "") then
         set diffcopy=`expr $countsci - $countcopy`
         if ($diffcopy != 0) then
             echo " Some files were not copied properly to the Hub "
-            python ~/ESO_data_transfer/Callisto_Astra/mail_alert.py $telescope_name $diffcopy
+            python ${PYTHON_SCRIPTS_PATH}/mail_alert.py $telescope_name $diffcopy
         else
             echo " All files were copied properly to the Hub "
         endif
         echo ""
 
 	    echo "Running astrometry.py..."
-            python ~/ESO_data_transfer/Callisto_Astra/astrometry_spirit.py $filelist
+            python ${PYTHON_SCRIPTS_PATH}/astrometry_spirit.py $filelist
 	    #python ~/ESO_data_transfer/Callisto_Astra/astrometry.py $filelist
 	    echo ""
 
@@ -99,7 +103,7 @@ if ("$1" == "") then
 	    echo ""
 
 	    echo "Running headerfix.py..."
-	    python ~/ESO_data_transfer/Callisto_Astra/headerfix.py $filelist2 $telescope_name
+	    python ${PYTHON_SCRIPTS_PATH}/headerfix.py $filelist2 $telescope_name
 	    echo ""
 
         if  (! -e $log_dir/$date) then
@@ -125,7 +129,7 @@ if ("$1" == "") then
 	    echo $date $count >> $logfile
 
         echo " Copying the global log file to the Cambridge server "
-        sshpass -p 'eij7iaXi' scp $logfile $appcg_path
+        sshpass -p "${CAMBRIDGE_SERVER_PASSWORD}" scp $logfile $appcg_path
 	
 	    echo " Transferring the files to ESO directory "
 	    find $data_dir/$date -maxdepth 1 -name "SPECULOOS*fits" -type f -exec mv {} $eso_dir/. \;
@@ -136,7 +140,7 @@ if ("$1" == "") then
 	    find $data_dir/$date -maxdepth 1 -name "*fits" -type f -exec basename {} \; > $filelist4
 	    set num_bad_files=`wc -l < "$filelist4"`
 	    if ($num_bad_files != 0) then
-	        python ~/ESO_data_transfer/Callisto_Astra/mail_alert.py $telescope_name $num_bad_files
+	        python ${PYTHON_SCRIPTS_PATH}/mail_alert.py $telescope_name $num_bad_files
             echo " Some files were not transferred properly "
 	    else
 	        echo " All files were transferred properly "
@@ -199,14 +203,14 @@ else
         set diffcopy=`expr $countsci - $countcopy`
         if ($diffcopy != 0) then
             echo " Some files were not copied properly to the Hub "
-            python ~/ESO_data_transfer/Callisto_Astra/mail_alert.py $telescope_name $diffcopy
+            python ${PYTHON_SCRIPTS_PATH}/mail_alert.py $telescope_name $diffcopy
         else
             echo " All files were copied properly to the Hub "
         endif
         echo ""
 
 	    echo "Running astrometry.py..."
-	    python ~/ESO_data_transfer/Callisto_Astra/astrometry.py $filelist
+	    python ${PYTHON_SCRIPTS_PATH}/astrometry.py $filelist
 	    echo ""
 
 	    echo " Making a list of the solved images (infiles_solved.dat)"
@@ -215,7 +219,7 @@ else
 	    echo ""
 
 	    echo "Running headerfix.py..."
-	    python ~/ESO_data_transfer/Callisto_Astra/headerfix.py $filelist2 $telescope_name
+	    python ${PYTHON_SCRIPTS_PATH}/headerfix.py $filelist2 $telescope_name
 	    echo ""
 
         if  (! -e $log_dir/$date) then
@@ -241,7 +245,7 @@ else
 	    echo $date $count >> $logfile
 
         echo " Copying the global log file to the Cambridge server "
-        #sshpass -p 'eij7iaXi' scp $logfile $appcg_path
+        #sshpass -p "${CAMBRIDGE_SERVER_PASSWORD}" scp $logfile $appcg_path
 
 	    echo " Transferring the files to ESO directory "
 	    find $data_dir/$date -maxdepth 1 -name "SPECULOOS*fits" -type f -exec mv {} $eso_dir/. \;
@@ -252,7 +256,7 @@ else
 	    find $data_dir/$date -maxdepth 1 -name "*fits" -type f -exec basename {} \; > $filelist4
 	    set num_bad_files=`wc -l < "$filelist4"`
 	    if ($num_bad_files != 0) then
-		    python ~/ESO_data_transfer/Callisto_Astra/mail_alert.py $telescope_name $num_bad_files
+		    python ${PYTHON_SCRIPTS_PATH}/mail_alert.py $telescope_name $num_bad_files
             echo " Some files were not transferred properly "
 	    else
 		    echo " All files were transferred properly "

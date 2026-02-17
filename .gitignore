@@ -1,3 +1,8 @@
+# Credentials and sensitive information
+.env
+.credentials.csh
+DEPLOYMENT_GUIDE.md
+
 # Python
 __pycache__/
 *.py[cod]
@@ -19,6 +24,18 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+env/
+venv/
+ENV/
+.venv
+
+# Logs
+*.log
+Logs/
+
+# Data directories
+workdir/
+Astra_mount/
 
 # IDEs
 .vscode/

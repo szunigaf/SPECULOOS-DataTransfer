@@ -1,12 +1,19 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Created on Thu Apr 25 16:56:38 2019
+Revised on Feb 17 2026
 
 @author: laetitia
+@author: Seba Zuniga-Fernandez
 """
 import sys
+import os
 import smtplib
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 
 ###############
@@ -32,10 +39,23 @@ def sendemail(from_addr, to_addr_list, cc_addr_list,
 if __name__ == '__main__':
     telescope = str(sys.argv[1])
     num_bad_files = str(sys.argv[2])
-    sendemail(from_addr='lcd44@cam.ac.uk',
-              to_addr_list=['lcd44@cam.ac.uk'],
-              cc_addr_list=[],
+    
+    # Get credentials from environment variables
+    email_from = os.getenv('EMAIL_FROM', 'lcd44@cam.ac.uk')
+    email_to = os.getenv('EMAIL_TO', 'lcd44@cam.ac.uk')
+    smtp_login = os.getenv('SMTP_LOGIN', 'lcd44')
+    smtp_password = os.getenv('SMTP_PASSWORD', 'noelia207')
+    smtp_server = os.getenv('SMTP_SERVER', 'smtp.hermes.cam.ac.uk:587')
+    
+    # Parse CC recipients if provided
+    email_cc_str = os.getenv('EMAIL_CC', '')
+    email_cc = [email.strip() for email in email_cc_str.split(',')] if email_cc_str else []
+    
+    sendemail(from_addr=email_from,
+              to_addr_list=[email_to],
+              cc_addr_list=email_cc,
               subject=str("Issue with transfer of files to ESO archive for " + telescope),
               message=str(num_bad_files + " files were not transferred to ESO archive for " + telescope),
-              login='lcd44',
-              password='noelia207')
+              login=smtp_login,
+              password=smtp_password,
+              smtpserver=smtp_server)

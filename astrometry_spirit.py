@@ -1,7 +1,10 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
+Revised on Feb 17 2026
+
 @author: laetitia
+@author: Seba Zuniga-Fernandez
 """
 
 from multiprocessing.dummy import Pool as ThreadPool

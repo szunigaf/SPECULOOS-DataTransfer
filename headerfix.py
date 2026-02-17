@@ -1,9 +1,11 @@
-#!/usr/bin/env python2
+ #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Created on Fri Jan 12 15:03:30 2018
+Revised on Feb 17 2026
 
 @author: laetitia
+@author: Seba Zuniga-Fernandez
 """
 
 from astropy.io import fits
