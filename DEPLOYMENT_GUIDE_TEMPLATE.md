@@ -193,22 +193,14 @@ echo "✅ All telescopes updated!"
 Set up automated data transfer for each telescope:
 
 ```bash
-crontab -e
+env EDITOR=nano crontab -e
 ```
 
 Add entries for each telescope (adjust times as needed):
 ```cron
-# Io - Run at 2 AM daily
-0 2 * * * cd ~/ESO_data_transfer/Io_Astra && ./transfer_Astra.csh >> ~/ESO_data_transfer/Io_Astra/Logs/cron.log 2>&1
+# Callisto example
+45 13 * * * csh /home/speculoos/ESO_data_transfer/Callisto_Astra/transfer_Astra.csh > /home/speculoos/ESO_data_transfer/Callisto_Astra/cron_logs/`date +\%Y-\%m-\%d_\%H:\%M:\%S`_transfer_cron.log 2>&1
 
-# Europa - Run at 3 AM daily
-0 3 * * * cd ~/ESO_data_transfer/Europa_Astra && ./transfer_Astra.csh >> ~/ESO_data_transfer/Europa_Astra/Logs/cron.log 2>&1
-
-# Ganymede - Run at 4 AM daily
-0 4 * * * cd ~/ESO_data_transfer/Ganymede_Astra && ./transfer_Astra.csh >> ~/ESO_data_transfer/Ganymede_Astra/Logs/cron.log 2>&1
-
-# Callisto - Run at 5 AM daily
-0 5 * * * cd ~/ESO_data_transfer/Callisto_Astra && ./transfer_Astra.csh >> ~/ESO_data_transfer/Callisto_Astra/Logs/cron.log 2>&1
 ```
 
 ## Maintenance

@@ -117,8 +117,8 @@ crontab -e
 ```
 
 ```cron
-# Run at 2 AM daily
-0 2 * * * cd ~/ESO_data_transfer/Callisto_Astra && ./transfer_Astra.csh >> Logs/cron.log 2>&1
+# Run at 13:45 daily
+45 13 * * * csh /home/speculoos/ESO_data_transfer/Callisto_Astra/transfer_Astra.csh > /home/speculoos/ESO_data_transfer/Callisto_Astra/cron_logs/`date +\%Y-\%m-\%d_\%H:\%M:\%S`_transfer_cron.log 2>&1
 ```
 
 ## Pipeline Steps

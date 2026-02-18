@@ -1,7 +1,12 @@
 # Credentials and sensitive information
 .env
 .credentials.csh
-DEPLOYMENT_GUIDE.md
+PYTHON3_MIGRATION.md
+DEPLOYMENT_GUIDE.README.md
+CREDENTIALS_SETUP.md
+
+# Scripts not ready for repository
+create_datacubes.py
 
 # Python
 __pycache__/

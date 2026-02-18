@@ -68,7 +68,7 @@ pip install python-dotenv
 ```
 .
 ├── transfer_Astra.csh           # Main transfer script (telescope-agnostic)
-├── astrometry_spirit.py         # File preparation for astrometry
+├── astrometry.py                # Astrometric plate solving (Io, Europa, Ganymede)
 ├── headerfix.py                 # FITS header standardization
 ├── mail_alert.py                # Email notification system
 │
@@ -100,7 +100,7 @@ pip install python-dotenv
                             ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                   Hub Work Directory                        │
-│  [Copy Files] → [Rename .fts→.fits] → [Fix Headers]        │
+│  [Copy Files] → [Astrometry Solving] → [Fix Headers]       │
 └───────────────────────────┬─────────────────────────────────┘
                             │ Transfer
                             ▼
