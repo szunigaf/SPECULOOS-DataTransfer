@@ -86,7 +86,6 @@ pip install python-dotenv
 
 ## Documentation
 
-- **[CREDENTIALS_SETUP.md](CREDENTIALS_SETUP.md)**: Complete guide for setting up credentials and environment variables
 - **[DEPLOYMENT_GUIDE_TEMPLATE.md](DEPLOYMENT_GUIDE_TEMPLATE.md)**: Template for deploying across multiple telescopes
 - **[transfer_Astra_summary.md](transfer_Astra_summary.md)**: Technical overview of the data transfer pipeline
 
@@ -144,12 +143,12 @@ See the `.credentials.csh.<Telescope>.example` files for template configurations
 Set up cron jobs for automated daily transfers:
 
 ```bash
-crontab -e
+env EDITOR=nano crontab -e
 ```
 
-Add entry (example for Callisto at 2 AM):
+Add entry (example for Callisto):
 ```cron
-0 2 * * * cd ~/ESO_data_transfer/Callisto_Astra && ./transfer_Astra.csh >> Logs/cron.log 2>&1
+45 13 * * * csh /home/speculoos/ESO_data_transfer/Callisto_Astra/transfer_Astra.csh > /home/speculoos/ESO_data_transfer/Callisto_Astra/cron_logs/`date +\%Y-\%m-\%d_\%H:\%M:\%S`_transfer_cron.log 2>&1
 ```
 
 ## Security
@@ -213,7 +212,8 @@ See [LICENSE](LICENSE) file for details.
 
 ## Authors
 
-- Original author: Laetitia Delrez (headerfix.py, mail_alert.py)
+- Original author: Laetitia Delrez 2018
+- Revised and updated by Seba Zúñiga-Fernández 2026
 - Pipeline architecture: SPECULOOS team
 
 ## Support
