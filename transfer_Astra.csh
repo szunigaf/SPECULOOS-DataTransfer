@@ -44,8 +44,10 @@ echo ""
 
 # Date of start of the night can be current date - 1 or an argument of the command
 # In format YYYYMMDD
+# Optional second argument: program ID (e.g., "61.A-1234(A)")
 if ("$1" == "") then
     set date="`date --date=yesterday +%Y%m%d`"
+    set prog_id=""
     echo "Night transferred (date of the start of the night):" "$date"
     echo ""
 
@@ -103,7 +105,11 @@ if ("$1" == "") then
 	    echo ""
 
 	    echo "Running headerfix.py..."
-	    python ${PYTHON_SCRIPTS_PATH}/headerfix.py $filelist2 $telescope_name
+	    if ("$prog_id" == "") then
+		python ${PYTHON_SCRIPTS_PATH}/headerfix.py $filelist2 $telescope_name
+	    else
+		python ${PYTHON_SCRIPTS_PATH}/headerfix.py $filelist2 $telescope_name "$prog_id"
+	    endif
 	    echo ""
 
         if  (! -e $log_dir/$date) then
@@ -161,6 +167,11 @@ if ("$1" == "") then
 
 else
     set DATES="$1"
+    if ("$2" == "") then
+        set prog_id=""
+    else
+        set prog_id="$2"
+    endif
     foreach date ($DATES)
 	echo $date
 	echo "Night transferred (date of the start of the night):" "$date"
@@ -219,7 +230,11 @@ else
 	    echo ""
 
 	    echo "Running headerfix.py..."
-	    python ${PYTHON_SCRIPTS_PATH}/headerfix.py $filelist2 $telescope_name
+	    if ("$prog_id" == "") then
+		python ${PYTHON_SCRIPTS_PATH}/headerfix.py $filelist2 $telescope_name
+	    else
+		python ${PYTHON_SCRIPTS_PATH}/headerfix.py $filelist2 $telescope_name "$prog_id"
+	    endif
 	    echo ""
 
         if  (! -e $log_dir/$date) then

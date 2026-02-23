@@ -24,8 +24,29 @@ inlist = str(sys.argv[1])
 
 telescope = str(sys.argv[2]) #options are 'Io', 'Europa', 'Ganymede', 'Callisto'
 
+# Optional third argument for custom programID
+# If not provided, use default values based on telescope
+if len(sys.argv) > 3:
+    custom_program_id = str(sys.argv[3])
+else:
+    custom_program_id = None
+
 
 def apply_correct(filename):
+    
+        # Default program IDs for each telescope
+        default_program_ids = {
+            'Io': '60.A-9009(A)',
+            'Europa': '60.A-9009(B)',
+            'Ganymede': '60.A-9009(C)',
+            'Callisto': '60.A-9009(D)'
+        }
+        
+        # Use custom program ID if provided, otherwise use default
+        if custom_program_id is not None:
+            program_id = custom_program_id
+        else:
+            program_id = default_program_ids.get(telescope, '60.A-9009(A)')
               
         with fits.open(filename, do_not_scale_image_data=True) as infile:    
         
@@ -73,25 +94,25 @@ def apply_correct(filename):
                 infile[0].header['TELESCOP'] = 'SPECULOOS-IO'
                 infile[0].header['INSTRUME'] = 'SPECULOOS1'
                 infile[0].header['HIERARCH ESO INS NAME'] = ('SPECULOOS1','Instrument name')
-                infile[0].header['HIERARCH ESO OBS PROG ID'] = ('60.A-9009(A)','ESO program identification')
+                infile[0].header['HIERARCH ESO OBS PROG ID'] = (program_id,'ESO program identification')
             #if infile[0].header['TELESCOP'] == 'ACP->EUROPA' or infile[0].header['TELESCOP'] == 'ACP->Europa' or infile[0].header['TELESCOP'] == 'Europa':
             if telescope == 'Europa':
                 infile[0].header['TELESCOP'] = 'SPECULOOS-EUROPA'
                 infile[0].header['INSTRUME'] = 'SPECULOOS2'
                 infile[0].header['HIERARCH ESO INS NAME'] = ('SPECULOOS2','Instrument name')
-                infile[0].header['HIERARCH ESO OBS PROG ID'] = ('60.A-9009(B)','ESO program identification')
+                infile[0].header['HIERARCH ESO OBS PROG ID'] = (program_id,'ESO program identification')
             #if infile[0].header['TELESCOP'] == 'ACP->GANYMEDE' or infile[0].header['TELESCOP'] == 'ACP->Ganymede' or infile[0].header['TELESCOP'] == 'Ganymede':
             if telescope == 'Ganymede':
                 infile[0].header['TELESCOP'] = 'SPECULOOS-GANYMEDE' 
                 infile[0].header['INSTRUME'] = 'SPECULOOS3'
                 infile[0].header['HIERARCH ESO INS NAME'] = ('SPECULOOS3','Instrument name')
-                infile[0].header['HIERARCH ESO OBS PROG ID'] = ('60.A-9009(C)','ESO program identification')
+                infile[0].header['HIERARCH ESO OBS PROG ID'] = (program_id,'ESO program identification')
             #if infile[0].header['TELESCOP'] == 'ACP->CALLISTO' or infile[0].header['TELESCOP'] == 'ACP->Callisto'or infile[0].header['TELESCOP'] == 'Callisto':
             if telescope == 'Callisto':
                 infile[0].header['TELESCOP'] = 'SPECULOOS-CALLISTO'
                 infile[0].header['INSTRUME'] = 'SPECULOOS4'
                 infile[0].header['HIERARCH ESO INS NAME'] = ('SPECULOOS4','Instrument name')
-                infile[0].header['HIERARCH ESO OBS PROG ID'] = ('60.A-9009(D)','ESO program identification')
+                infile[0].header['HIERARCH ESO OBS PROG ID'] = (program_id,'ESO program identification')
         
             #KWDs that do not depend on the telescope used
         
