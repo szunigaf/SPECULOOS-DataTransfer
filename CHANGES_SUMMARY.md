@@ -177,14 +177,6 @@ The SPECULOOS Data Transfer repository has been completely refactored with three
     - Security notes
     - Troubleshooting section
 
-### Infrastructure
-
-12. **`.gitignore`** (Updated)
-    - Added `.env` and `.credentials.csh` to ignore list
-    - Added log and data directories
-    - Enhanced Python and environment ignores
-    - Prevents accidental credential commits
-
 ## Architecture Changes
 
 ### Before
