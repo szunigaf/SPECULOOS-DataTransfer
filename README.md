@@ -61,7 +61,6 @@ This repository contains scripts to automate the transfer and formatting of astr
 ```
 .
 ├── transfer_Astra.csh                    # Main transfer script
-├── transfer_Astra_local_test.csh         # Local testing version
 ├── astrometry.py                         # Astrometric solving (Io, Europa, Ganymede)
 ├── astrometry_spirit.py                  # File renaming (Callisto)
 ├── headerfix.py                          # FITS header standardization
@@ -73,7 +72,6 @@ This repository contains scripts to automate the transfer and formatting of astr
 ├── .credentials.csh.Io.example           # Io-specific template
 ├── .credentials.csh.Europa.example       # Europa-specific template
 ├── .credentials.csh.Ganymede.example     # Ganymede-specific template
-├── .credentials.csh.local_test.example   # Local testing template
 │
 ├── INSTALLATION_GUIDE.md                 # Server deployment guide
 ├── DEPLOYMENT_GUIDE_TEMPLATE.md          # Multi-telescope setup
@@ -153,9 +151,8 @@ Add entry (example for Callisto):
 - These files are **git-ignored** and should NEVER be committed
 - Use `.example` template files for reference
 - Set restrictive permissions: `chmod 600` on credential files
-## Security
 
-⚠️ **Important:**
+
 ## Monitoring
 
 ```bash
