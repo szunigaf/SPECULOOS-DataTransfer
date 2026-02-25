@@ -1,4 +1,6 @@
- #!/usr/bin/env python3
+# #!/opt/anaconda3/envs/speculoos_py3/bin/python
+# For server deployment, use:
+#!/home/speculoos/Programs/anaconda2/envs/speculoos_py3/bin/python
 # -*- coding: utf-8 -*-
 """
 Created on Fri Jan 12 15:03:30 2018
@@ -139,17 +141,17 @@ def apply_correct(filename):
                     #c = SkyCoord(ra=infile[0].header['RA'], dec=infile[0].header['DEC'], unit=(u.hourangle, u.deg), frame='fk5')
                     c = SkyCoord(ra=infile[0].header['RA'], dec=infile[0].header['DEC'], unit=(u.deg, u.deg), frame='fk5')
                 except Exception as e1:
-                    print e1
+                    print(e1)
                     try:
                         #c = SkyCoord(ra=infile[0].header['RA'], dec=infile[0].header['DEC'], unit=(u.hourangle, u.deg), frame='fk5')
                         c = SkyCoord(ra=infile[0].header['RA'], dec=infile[0].header['DEC'], unit=(u.deg, u.deg), frame='fk5')
                     except Exception as e2:
-                        print e2
+                        print(e2)
                         try:
                             #c = SkyCoord(ra=infile[0].header['RA'], dec=infile[0].header['DEC'], unit=(u.hourangle, u.deg), frame='fk5')
                             c = SkyCoord(ra=infile[0].header['RA'], dec=infile[0].header['DEC'], unit=(u.deg, u.deg), frame='fk5')
                         except Exception as e3:
-                            print e3
+                            print(e3)
                 infile[0].header['RA']=(float('%.*f' % (5, c.ra.degree)),'[deg] Target right ascension')
                 infile[0].header['DEC']=(float('%.*f' % (5, c.dec.degree)),'[deg] Target declination')    
         

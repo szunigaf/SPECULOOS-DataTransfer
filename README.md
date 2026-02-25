@@ -25,40 +25,33 @@ This repository contains scripts to automate the transfer and formatting of astr
 
 ### Prerequisites
 
-```bash
-# Install required Python package
-pip install python-dotenv
-```
+- Python 3.7+ with conda environment
+- Packages: `astropy`, `python-dotenv`, `numpy` (see `requirements.txt`)
 
-### Setup for a Telescope
+### Setup
 
-1. **Choose your telescope** (Io, Europa, Ganymede, or Callisto)
-
-2. **Copy the appropriate credentials template:**
+1. **Create conda environment:**
    ```bash
-   cp .credentials.csh.Io.example .credentials.csh       # For Io
-   cp .credentials.csh.Europa.example .credentials.csh   # For Europa
-   cp .credentials.csh.Ganymede.example .credentials.csh # For Ganymede
-   cp .credentials.csh.example .credentials.csh          # For Callisto
+   conda create -n speculoos_py3 python=3.7
+   conda activate speculoos_py3
+   pip install -r requirements.txt
    ```
 
-3. **Copy Python environment template:**
+2. **Copy credentials template:**
    ```bash
+   # Choose your telescope: Io, Europa, Ganymede, or Callisto
+   cp .credentials.csh.Io.example .credentials.csh
    cp .env.example .env
    ```
 
-4. **Edit configuration files with your credentials:**
+3. **Edit credentials:**
    ```bash
    nano .credentials.csh
    nano .env
-   ```
-
-5. **Secure credential files:**
-   ```bash
    chmod 600 .credentials.csh .env
    ```
 
-6. **Run the transfer script:**
+4. **Run transfer:**
    ```bash
    ./transfer_Astra.csh
    ```
@@ -67,27 +60,36 @@ pip install python-dotenv
 
 ```
 .
-├── transfer_Astra.csh           # Main transfer script (telescope-agnostic)
-├── astrometry.py                # Astrometric plate solving (Io, Europa, Ganymede)
-├── headerfix.py                 # FITS header standardization
-├── mail_alert.py                # Email notification system
+├── transfer_Astra.csh                    # Main transfer script
+├── transfer_Astra_local_test.csh         # Local testing version
+├── astrometry.py                         # Astrometric solving (Io, Europa, Ganymede)
+├── astrometry_spirit.py                  # File renaming (Callisto)
+├── headerfix.py                          # FITS header standardization
+├── mail_alert.py                         # Email notifications
+├── requirements.txt                      # Python dependencies
 │
-├── .env.example                 # Python credentials template
-├── .credentials.csh.example     # C shell credentials template (Callisto)
-├── .credentials.csh.Io.example      # Io-specific template
-├── .credentials.csh.Europa.example  # Europa-specific template
-├── .credentials.csh.Ganymede.example # Ganymede-specific template
+├── .env.example                          # Email credentials template
+├── .credentials.csh.example              # Shell credentials (Callisto)
+├── .credentials.csh.Io.example           # Io-specific template
+├── .credentials.csh.Europa.example       # Europa-specific template
+├── .credentials.csh.Ganymede.example     # Ganymede-specific template
+├── .credentials.csh.local_test.example   # Local testing template
 │
-├── CREDENTIALS_SETUP.md         # Detailed setup instructions
-├── DEPLOYMENT_GUIDE.md          # Multi-telescope deployment guide
-├── transfer_Astra_summary.md    # Technical documentation
-└── README.md                    # This file
+├── INSTALLATION_GUIDE.md                 # Server deployment guide
+├── DEPLOYMENT_GUIDE_TEMPLATE.md          # Multi-telescope setup
+├── QUICK_REFERENCE.md                    # Daily operations reference
+├── CHANGES_SUMMARY.md                    # Complete changelog
+├── transfer_Astra_summary.md             # Technical documentation
+└── README.md                             # This file
 ```
 
 ## Documentation
 
-- **[DEPLOYMENT_GUIDE_TEMPLATE.md](DEPLOYMENT_GUIDE_TEMPLATE.md)**: Template for deploying across multiple telescopes
-- **[transfer_Astra_summary.md](transfer_Astra_summary.md)**: Technical overview of the data transfer pipeline
+- **[INSTALLATION_GUIDE.md](INSTALLATION_GUIDE.md)**: Server deployment and setup guide
+- **[DEPLOYMENT_GUIDE_TEMPLATE.md](DEPLOYMENT_GUIDE_TEMPLATE.md)**: Multi-telescope deployment template
+- **[QUICK_REFERENCE.md](QUICK_REFERENCE.md)**: Quick reference for daily operations
+- **[transfer_Astra_summary.md](transfer_Astra_summary.md)**: Technical pipeline documentation
+- **[CHANGES_SUMMARY.md](CHANGES_SUMMARY.md)**: Complete changelog of all updates
 
 ## Pipeline Workflow
 
@@ -111,15 +113,7 @@ pip install python-dotenv
 
 ## Telescope Configuration
 
-Each telescope has specific configuration requirements. Consult your internal documentation for:
-
-- Instrument identifiers (SPECULOOS1-4)
-- ESO Program IDs (60.A-9009)
-- Control PC network addresses
-- ESO archive directories
-- Cambridge server paths
-
-See the `.credentials.csh.<Telescope>.example` files for template configurations.
+Each telescope requires specific credentials. See `.credentials.csh.<Telescope>.example` files for templates with telescope-specific values.
 
 ## Usage
 
@@ -159,61 +153,44 @@ Add entry (example for Callisto):
 - These files are **git-ignored** and should NEVER be committed
 - Use `.example` template files for reference
 - Set restrictive permissions: `chmod 600` on credential files
-- Regularly rotate passwords
-- Consider SSH key-based authentication for remote servers
+## Security
 
-## Monitoring & Logs
+⚠️ **Important:**
+## Monitoring
 
-### Transfer Logs
 ```bash
 # View transfer history
-tail -20 ~/ESO_data_transfer/Callisto_Astra/Logs/transfer_log.txt
+tail -20 Logs/transfer_log.txt
 
-# Check for failed transfers
-ls ~/ESO_data_transfer/Callisto_Astra/Logs/*/non_transferred
+# Check failures
+ls Logs/*/non_transferred
+
+# View cron logs
+tail -50 cron_logs/*_transfer_cron.log
 ```
 
-### Email Alerts
-
-The system sends automatic email alerts when:
-- Files fail to copy from Control PC to Hub
-- Files fail to transfer to ESO directory
-
-Configure email settings in `.env` file.
-
-## Troubleshooting
-
+Email alerts are sent automatically when transfers fail (configure in `.env`).
 ### "Credentials file not found"
 Ensure `.credentials.csh` exists in the script directory or `~/.credentials.csh`
 
 ### "TELESCOPE_NAME not set"
 Edit `.credentials.csh` and verify `TELESCOPE_NAME` is properly set
+## Troubleshooting
 
-### Python scripts not found
-Check `PYTHON_SCRIPTS_PATH` in `.credentials.csh` points to the correct directory
+| Issue | Solution |
+|-------|----------|
+| Credentials not found | Copy `.credentials.csh.example` to `.credentials.csh` |
+| TELESCOPE_NAME not set | Verify setting in `.credentials.csh` |
+| Python import error | `conda activate speculoos_py3; pip install -r requirements.txt` |
+| Email not working | Install `python-dotenv`, verify `.env` credentials |
 
-### Email alerts not working
-1. Install python-dotenv: `pip install python-dotenv`
-2. Verify email credentials in `.env` file
-3. Test SMTP connection manually
-
-## Contributing
-
-When making changes to the scripts:
-
-1. **Test thoroughly** on one telescope before deploying to all
-2. **Update documentation** if adding new features
+See `INSTALLATION_GUIDE.md` for detailed troubleshooting.dding new features
 3. **Never commit credential files** (`.env`, `.credentials.csh`)
 4. **Use telescope-agnostic code** - avoid hardcoding telescope names
 
-## License
+## Contributing
 
-See [LICENSE](LICENSE) file for details.
-
-## Authors
-
-- Original author: Laetitia Delrez 2018
-- Revised and updated by Seba Zúñiga-Fernández 2026
+Test thoroughly before deploying. Never commit credential files. Keep code telescope-agnostic.
 - Pipeline architecture: SPECULOOS team
 
 ## Support
@@ -226,5 +203,11 @@ For issues or questions:
 
 ---
 
-**Last Updated**: February 2026
+## Support
 
+Check documentation in this repository and log files. Contact SPECULOOS data management team for issues.
+
+---
+
+**Authors**: Original by Laetitia Delrez (2018), revised by Seba Zúñiga-Fernández (2026)  
+**Last Updated**: February 2026

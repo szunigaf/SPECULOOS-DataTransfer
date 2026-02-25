@@ -19,6 +19,22 @@ if (! $?TELESCOPE_NAME) then
     exit 1
 endif
 
+# Unset Python environment variables to avoid conflicts with conda
+unsetenv PYTHONHOME
+unsetenv PYTHONPATH
+
+# Activate conda environment if available
+if ( -f /home/speculoos/Programs/anaconda2/etc/profile.d/conda.csh ) then
+    source /home/speculoos/Programs/anaconda2/etc/profile.d/conda.csh
+    conda activate speculoos_py3
+    echo "Activated conda environment: speculoos_py3"
+    echo ""
+else
+    echo "Warning: Conda not found at /home/speculoos/Programs/anaconda2"
+    echo "Using system python3 - ensure packages are installed"
+    echo ""
+endif
+
 # Set variables from environment (loaded from .credentials.csh)
 set telescope_name="${TELESCOPE_NAME}"
 set acp_control_pc_path="//${CONTROL_PC_USER}:${CONTROL_PC_PASSWORD}@${CONTROL_PC_IP}${CONTROL_PC_PATH}"
@@ -88,15 +104,15 @@ if ("$1" == "") then
         set diffcopy=`expr $countsci - $countcopy`
         if ($diffcopy != 0) then
             echo " Some files were not copied properly to the Hub "
-            python ${PYTHON_SCRIPTS_PATH}/mail_alert.py $telescope_name $diffcopy
+            python3 ${PYTHON_SCRIPTS_PATH}/mail_alert.py $telescope_name $diffcopy
         else
             echo " All files were copied properly to the Hub "
         endif
         echo ""
 
-	    echo "Running astrometry.py..."
-            python ${PYTHON_SCRIPTS_PATH}/astrometry_spirit.py $filelist
-	    #python ~/ESO_data_transfer/Callisto_Astra/astrometry.py $filelist
+	echo "Running astrometry.py..."
+            python3 ${PYTHON_SCRIPTS_PATH}/astrometry_spirit.py $filelist
+	    #python3 ~/ESO_data_transfer/Callisto_Astra/astrometry.py $filelist
 	    echo ""
 
 	    echo " Making a list of the solved images (infiles_solved.dat)"
@@ -104,11 +120,11 @@ if ("$1" == "") then
 	    find $data_dir/$date -maxdepth 1 -name "*fits" -type f > $filelist2
 	    echo ""
 
-	    echo "Running headerfix.py..."
+	echo "Running headerfix.py..."
 	    if ("$prog_id" == "") then
-		python ${PYTHON_SCRIPTS_PATH}/headerfix.py $filelist2 $telescope_name
+		python3 ${PYTHON_SCRIPTS_PATH}/headerfix.py $filelist2 $telescope_name
 	    else
-		python ${PYTHON_SCRIPTS_PATH}/headerfix.py $filelist2 $telescope_name "$prog_id"
+		python3 ${PYTHON_SCRIPTS_PATH}/headerfix.py $filelist2 $telescope_name "$prog_id"
 	    endif
 	    echo ""
 
@@ -146,7 +162,7 @@ if ("$1" == "") then
 	    find $data_dir/$date -maxdepth 1 -name "*fits" -type f -exec basename {} \; > $filelist4
 	    set num_bad_files=`wc -l < "$filelist4"`
 	    if ($num_bad_files != 0) then
-	        python ${PYTHON_SCRIPTS_PATH}/mail_alert.py $telescope_name $num_bad_files
+	        python3 ${PYTHON_SCRIPTS_PATH}/mail_alert.py $telescope_name $num_bad_files
             echo " Some files were not transferred properly "
 	    else
 	        echo " All files were transferred properly "
@@ -214,26 +230,24 @@ else
         set diffcopy=`expr $countsci - $countcopy`
         if ($diffcopy != 0) then
             echo " Some files were not copied properly to the Hub "
-            python ${PYTHON_SCRIPTS_PATH}/mail_alert.py $telescope_name $diffcopy
+            python3 ${PYTHON_SCRIPTS_PATH}/mail_alert.py $telescope_name $diffcopy
         else
             echo " All files were copied properly to the Hub "
         endif
         echo ""
 
-	    echo "Running astrometry.py..."
-	    python ${PYTHON_SCRIPTS_PATH}/astrometry.py $filelist
-	    echo ""
-
-	    echo " Making a list of the solved images (infiles_solved.dat)"
+	echo "Running astrometry.py..."
+	    python3 ${PYTHON_SCRIPTS_PATH}/astrometry.py $filelist
+	    echo ""	    echo " Making a list of the solved images (infiles_solved.dat)"
 	    set filelist2=$data_dir/$date/infiles_solved.dat
 	    find $data_dir/$date -maxdepth 1 -name "*fits" -type f > $filelist2
 	    echo ""
 
 	    echo "Running headerfix.py..."
 	    if ("$prog_id" == "") then
-		python ${PYTHON_SCRIPTS_PATH}/headerfix.py $filelist2 $telescope_name
+		python3 ${PYTHON_SCRIPTS_PATH}/headerfix.py $filelist2 $telescope_name
 	    else
-		python ${PYTHON_SCRIPTS_PATH}/headerfix.py $filelist2 $telescope_name "$prog_id"
+		python3 ${PYTHON_SCRIPTS_PATH}/headerfix.py $filelist2 $telescope_name "$prog_id"
 	    endif
 	    echo ""
 
@@ -271,7 +285,7 @@ else
 	    find $data_dir/$date -maxdepth 1 -name "*fits" -type f -exec basename {} \; > $filelist4
 	    set num_bad_files=`wc -l < "$filelist4"`
 	    if ($num_bad_files != 0) then
-		    python ${PYTHON_SCRIPTS_PATH}/mail_alert.py $telescope_name $num_bad_files
+		    python3 ${PYTHON_SCRIPTS_PATH}/mail_alert.py $telescope_name $num_bad_files
             echo " Some files were not transferred properly "
 	    else
 		    echo " All files were transferred properly "

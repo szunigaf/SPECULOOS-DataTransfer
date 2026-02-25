@@ -4,6 +4,7 @@
 PYTHON3_MIGRATION.md
 DEPLOYMENT_GUIDE.README.md
 CREDENTIALS_SETUP.md
+.credentials.csh.local_test
 
 # Scripts not ready for repository
 create_datacubes.py
@@ -41,6 +42,15 @@ Logs/
 # Data directories
 workdir/
 Astra_mount/
+astrometry.net-0.98/
+
+# Local testing directories and files
+test_workdir/
+test_logs/
+test_eso_output/
+transfer_Astra_local_test.csh
+LOCAL_TESTING.md
+transfer_Astra_local_test.csh
 
 # IDEs
 .vscode/

@@ -1,4 +1,7 @@
-#!/usr/bin/env python3
+
+# #!/opt/anaconda3/envs/speculoos_py3/bin/python
+# For server deployment, use:
+#!/home/speculoos/Programs/anaconda2/envs/speculoos_py3/bin/python
 # -*- coding: utf-8 -*-
 """
 Created on Thu Jul 19 10:47:51 2018
@@ -12,10 +15,35 @@ from multiprocessing.dummy import Pool as ThreadPool
 from functools import partial
 import sys
 import os 
+import shutil
 from astropy.io import fits
 
 #inlist = 'infiles.dat'
 inlist = str(sys.argv[1])
+
+# Check if solve-field is available
+SOLVE_FIELD_PATH = shutil.which('solve-field')
+if SOLVE_FIELD_PATH is None:
+    # Try common installation paths
+    common_paths = [
+        '/usr/local/astrometry/bin/solve-field',
+        '/usr/bin/solve-field',
+        '/opt/astrometry/bin/solve-field'
+    ]
+    for path in common_paths:
+        if os.path.exists(path) and os.access(path, os.X_OK):
+            SOLVE_FIELD_PATH = path
+            break
+
+if SOLVE_FIELD_PATH is None:
+    print("WARNING: solve-field command not found!")
+    print("Astrometry.net may not be installed or not in PATH.")
+    print("The script will only rename .fts files to .fits without solving astrometry.")
+    print("To install astrometry.net, visit: http://astrometry.net/")
+    ASTROMETRY_AVAILABLE = False
+else:
+    print("Found solve-field at: " + SOLVE_FIELD_PATH)
+    ASTROMETRY_AVAILABLE = True
 
 
 def solve_astrometry(filenameold):
@@ -58,17 +86,33 @@ def solve_astrometry(filenameold):
                 if infile_init[0].header['FILTER'][0] == 'z':
                     filenameb=filename[:-6]+'.fits'
                     os.rename(filename,filenameb)
+                
+                # Get RA and DEC, handle both string and numeric formats
                 RA = infile_init[0].header['RA']
-                str1 = str(RA.replace(" ", ":"))
                 DEC = infile_init[0].header['DEC']
-                str2 = str(DEC.replace(" ", ":"))
                 
-                # Run astrometry solver
-                cmd = "/usr/local/astrometry/bin/solve-field --no-plots --no-remove-lines --uniformize 0 --overwrite --ra " + str1 + " --dec " + str2 + " --radius 4 --depth 100 --downsample 2 --no-tweak " + str(filenameb)
-                result = os.system(cmd)
+                # Convert to string format expected by solve-field
+                if isinstance(RA, str):
+                    str1 = str(RA.replace(" ", ":"))
+                else:
+                    # RA is already in degrees (float)
+                    str1 = str(RA)
                 
-                if result != 0:
-                    print("Warning: Astrometry solving failed for " + filenameb)
+                if isinstance(DEC, str):
+                    str2 = str(DEC.replace(" ", ":"))
+                else:
+                    # DEC is already in degrees (float)
+                    str2 = str(DEC)
+                
+                # Run astrometry solver only if available
+                if ASTROMETRY_AVAILABLE:
+                    cmd = SOLVE_FIELD_PATH + " --no-plots --no-remove-lines --uniformize 0 --overwrite --ra " + str1 + " --dec " + str2 + " --radius 4 --depth 100 --downsample 2 --no-tweak " + str(filenameb)
+                    result = os.system(cmd)
+                    
+                    if result != 0:
+                        print("Warning: Astrometry solving failed for " + filenameb)
+                else:
+                    print("Skipping astrometry solving for " + filenameb + " (solve-field not available)")
                 
                 filenamebis=filenameb.replace('.fits','.new')
                 

@@ -1,4 +1,6 @@
-#!/usr/bin/env python3
+# #!/opt/anaconda3/envs/speculoos_py3/bin/python
+# For server deployment, use:
+#!/home/speculoos/Programs/anaconda2/envs/speculoos_py3/bin/python
 # -*- coding: utf-8 -*-
 """
 Revised on Feb 17 2026
