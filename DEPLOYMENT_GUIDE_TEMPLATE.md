@@ -114,10 +114,6 @@ Example (adjust time and telescope):
 45 13 * * * csh /home/speculoos/ESO_data_transfer/Callisto_Astra/transfer_Astra.csh > /home/speculoos/ESO_data_transfer/Callisto_Astra/cron_logs/`date +\%Y-\%m-\%d_\%H:\%M:\%S`_transfer_cron.log 2>&1
 ```
 
-## Maintenance
-
-### Check Transfer Status
-## Updating Scripts
 ## Monitoring
 
 ```bash
@@ -130,11 +126,10 @@ done
 # Check failures
 for T in Io Europa Ganymede Callisto; do
     [ -s ~/ESO_data_transfer/${T}_Astra/Logs/*/non_transferred ] && \
-        echo "⚠️ $T has failed transfers"
+        echo "$T has failed transfers"
 done
-```hon: can't open file 'astrometry_spirit.py'
+
 ```
-**Solution:** Ensure `PYTHON_SCRIPTS_PATH` in `.credentials.csh` points to the correct directory
 
 ## Benefits of This Architecture
 
