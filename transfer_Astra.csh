@@ -111,7 +111,7 @@ if ("$1" == "") then
         echo ""
 
 	echo "Running astrometry.py..."
-            python3 ${PYTHON_SCRIPTS_PATH}/astrometry_spirit.py $filelist
+            python3 ${PYTHON_SCRIPTS_PATH}/astrometry.py $filelist
 	    #python3 ~/ESO_data_transfer/Callisto_Astra/astrometry.py $filelist
 	    echo ""
 
@@ -274,7 +274,7 @@ else
 	    echo $date $count >> $logfile
 
         echo " Copying the global log file to the Cambridge server "
-        #sshpass -p "${CAMBRIDGE_SERVER_PASSWORD}" scp $logfile $appcg_path
+        sshpass -p "${CAMBRIDGE_SERVER_PASSWORD}" scp $logfile $appcg_path
 
 	    echo " Transferring the files to ESO directory "
 	    find $data_dir/$date -maxdepth 1 -name "SPECULOOS*fits" -type f -exec mv {} $eso_dir/. \;

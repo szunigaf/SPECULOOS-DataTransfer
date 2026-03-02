@@ -241,7 +241,7 @@ else
         echo ""
 
 	echo "Running astrometry.py..."
-	    python3 ${PYTHON_SCRIPTS_PATH}/astrometry.py $filelist
+	    python3 ${PYTHON_SCRIPTS_PATH}/astrometry_spirit.py $filelist
 	    echo ""	    echo " Making a list of the solved images (infiles_solved.dat)"
 	    set filelist2=$data_dir/$date/infiles_solved.dat
 	    find $data_dir/$date -maxdepth 1 -name "*fits" -type f > $filelist2
@@ -282,7 +282,7 @@ else
 	    echo $date $count >> $logfile
 
         echo " Copying the global log file to the Cambridge server "
-        #sshpass -p "${CAMBRIDGE_SERVER_PASSWORD}" scp $logfile $appcg_path
+        sshpass -p "${CAMBRIDGE_SERVER_PASSWORD}" scp $logfile $appcg_path
 
 	    echo " Transferring the files to ESO directory "
 	    find $data_dir/$date -maxdepth 1 -name "SPECULOOS*fits" -type f -exec mv {} $eso_dir/. \;
