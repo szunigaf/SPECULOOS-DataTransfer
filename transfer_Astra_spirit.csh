@@ -146,7 +146,7 @@ if ("$1" == "") then
 
 	    echo " Making a list of the final transferred files (list in the $log_dir/$date folder)"
 	    set filelist3=$log_dir/$date/transferred
-	    find $data_dir/$date -maxdepth 1 -name "SPECULOOS*fits" -type f -exec basename {} \; > $filelist3
+	    find $eso_dir -maxdepth 1 -name "SPECULOOS*${date}*fits" -type f -exec basename {} \; > $filelist3
 	    echo ""
 
 	    echo " Logging the number of transferred files into the global log file ($log_dir/transfer_log.txt) "
@@ -156,22 +156,6 @@ if ("$1" == "") then
 
         echo " Copying the global log file to the Cambridge server "
         sshpass -p "${CAMBRIDGE_SERVER_PASSWORD}" scp $logfile $appcg_path
-	
-	    echo " Transferring the files to ESO directory "
-	    find $data_dir/$date -maxdepth 1 -name "SPECULOOS*fits" -type f -exec mv {} $eso_dir/. \;
-	    echo ""
-
-	    echo " Making a list of the non-transferred files if any (list in the $log_dir/$date folder) "
-	    set filelist4=$log_dir/$date/non_transferred
-	    find $data_dir/$date -maxdepth 1 -name "*fits" -type f -exec basename {} \; > $filelist4
-	    set num_bad_files=`wc -l < "$filelist4"`
-	    if ($num_bad_files != 0) then
-	        python3 ${PYTHON_SCRIPTS_PATH}/mail_alert.py $telescope_name $num_bad_files
-            echo " Some files were not transferred properly "
-	    else
-	        echo " All files were transferred properly "
-	    endif
-	    echo ""
 
 	    echo " Deleting the data folder on the Hub for temporary data storage"
 	    rm -r $data_dir/$date
@@ -273,7 +257,7 @@ else
 
 	    echo " Making a list of the final transferred files (list in the $log_dir/$date folder)"
 	    set filelist3=$log_dir/$date/transferred
-	    find $data_dir/$date -maxdepth 1 -name "SPECULOOS*fits" -type f -exec basename {} \; > $filelist3
+	    find $eso_dir -maxdepth 1 -name "SPECULOOS*${date}*fits" -type f -exec basename {} \; > $filelist3
 	    echo ""
 
 	    echo " Logging the number of transferred files into the global log file ($log_dir/transfer_log.txt) "
@@ -283,22 +267,6 @@ else
 
         echo " Copying the global log file to the Cambridge server "
         sshpass -p "${CAMBRIDGE_SERVER_PASSWORD}" scp $logfile $appcg_path
-
-	    echo " Transferring the files to ESO directory "
-	    find $data_dir/$date -maxdepth 1 -name "SPECULOOS*fits" -type f -exec mv {} $eso_dir/. \;
-	    echo ""
-
-	    echo " Making a list of the non-transferred files if any (list in the $log_dir/$date folder) "
-	    set filelist4=$log_dir/$date/non_transferred
-	    find $data_dir/$date -maxdepth 1 -name "*fits" -type f -exec basename {} \; > $filelist4
-	    set num_bad_files=`wc -l < "$filelist4"`
-	    if ($num_bad_files != 0) then
-		    python3 ${PYTHON_SCRIPTS_PATH}/mail_alert.py $telescope_name $num_bad_files
-            echo " Some files were not transferred properly "
-	    else
-		    echo " All files were transferred properly "
-	    endif
-	    echo ""
 
 	    echo " Deleting the data folder on the Hub for temporary data storage"
 	    rm -r $data_dir/$date
