@@ -77,6 +77,8 @@ Revised on Feb 27 2026
 
 from astropy.io import fits
 from astropy.table import Table
+from astropy.time import Time
+import astropy.units as u
 import numpy as np
 import os
 import sys
@@ -283,7 +285,11 @@ def create_datacube(file_list, image_type, group_key, output_path):
         return False, '', ''
 
     ny, nx = ref_data.shape
-    cube = np.zeros((n, ny, nx), dtype=np.float32)
+    # Preserve the native dtype of the raw data:
+    #   raw ACP frames are uint16 (BITPIX=16) → cube stays integer
+    #   ESO-processed frames are typically float32 (BITPIX=-32) → cube stays float
+    cube_dtype = ref_data.dtype
+    cube = np.zeros((n, ny, nx), dtype=cube_dtype)
 
     # Per-frame metadata
     filenames, dates, exptimes, filters_, objects_, airmasses = [], [], [], [], [], []
@@ -306,7 +312,7 @@ def create_datacube(file_list, image_type, group_key, output_path):
                 skipped_shape += 1
                 continue
 
-            cube[valid] = data.astype(np.float32)
+            cube[valid] = data.astype(cube_dtype)
 
             filenames.append(os.path.basename(fpath))
             dates.append(str(header.get('DATE-OBS', '')))
@@ -332,10 +338,52 @@ def create_datacube(file_list, image_type, group_key, output_path):
     # Primary HDU with updated header
     primary_hdu = fits.PrimaryHDU(data=cube, header=ref_header)
     h = primary_hdu.header
-    h['NFRAMES']  = (valid,                'Number of frames in datacube')
-    h['CUBETYPE'] = (image_type.upper(),   'Frame type: SCIENCE, BIAS, DARK, FLAT')
-    h['CUBEKEY']  = (group_key,            'Grouping key')
-    h['CREATED']  = (datetime.now().isoformat(), 'Datacube creation timestamp')
+
+    # --- WCS axes -------------------------------------------------------------
+    # WCSAXES must match the actual number of array dimensions (3 for a cube).
+    # The value carried over from a 2D frame header is wrong (usually 0 or 2).
+    h['WCSAXES'] = (3, 'Number of WCS axes')
+
+    # --- WCS pixel units (CUNIT1/2 = spatial axes, CUNIT3 = frame axis) ------
+    h['CUNIT1'] = ('pixel', 'Axis 1 units')
+    h['CUNIT2'] = ('pixel', 'Axis 2 units')
+    h['CUNIT3'] = ('pixel', 'Axis 3 (frame) units')
+
+    # --- BLANK is only valid for integer arrays (BITPIX > 0) -----------------
+    # Remove it if the cube is floating-point; keep it for integer cubes.
+    if 'BLANK' in h and not np.issubdtype(cube_dtype, np.integer):
+        del h['BLANK']
+
+    # --- DATE-END: last frame DATE-OBS + EXPTIME -------------------------------
+    # ISO 8601 restricted: YYYY-MM-DDThh:mm:ss.sss  (exactly 3 decimal digits)
+    try:
+        last_exptime = exptimes[-1] if exptimes else float(ref_header.get('EXPTIME', 0))
+        t_end = Time(dates[-1]) + last_exptime * u.second
+        h['DATE-END'] = (t_end.isot[:23], 'End of last frame (DATE-OBS + EXPTIME)')
+    except Exception:
+        pass  # leave DATE-END as-is if we cannot compute it
+
+    # --- Fix float precision on selected keywords -----------------------------
+    _float_kw_2dp = ('FOCUSTEM', 'DOMEAZ', 'OBJCTAZ', 'OBJCTALT',
+                     'AIRMASS', 'FOCUSPOS', 'AMBTEMP', 'HUMIDITY')
+    for kw in _float_kw_2dp:
+        if kw in h:
+            try:
+                h[kw] = round(float(h[kw]), 2)
+            except (ValueError, TypeError):
+                pass
+
+    # --- Integer keywords -----------------------------------------------------
+    for kw in ('PIERSIDE', 'TELPARK'):
+        if kw in h:
+            try:
+                h[kw] = int(h[kw])
+            except (ValueError, TypeError):
+                pass
+
+    # --- Cube metadata --------------------------------------------------------
+    h['CUBETYPE'] = (image_type.upper(), 'Frame type: SCIENCE, BIAS, DARK, FLAT')
+    h['CUBEKEY']  = (group_key,          'Grouping key')
     h['COMMENT']  = 'Datacube created by create_datacubes.py'
 
     # Metadata table HDU
@@ -352,7 +400,19 @@ def create_datacube(file_list, image_type, group_key, output_path):
     os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
     fits.HDUList([primary_hdu, table_hdu]).writeto(output_path, overwrite=True)
 
+    # DATE = actual file-write timestamp (set after writeto so it is meaningful).
+    # Format: YYYY-MM-DDThh:mm:ss.sss
+    # CHECKSUM/DATASUM are recomputed here so they are valid for the final file.
+    write_time = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.') + \
+                 f"{datetime.utcnow().microsecond // 1000:03d}"
+    with fits.open(output_path, mode='update') as hdul:
+        hdul[0].header['DATE'] = (write_time, 'File creation date (UTC)')
+        hdul.flush(output_verify='silentfix')
+        for ext in hdul:
+            ext.add_checksum()
+
     size_mb = os.path.getsize(output_path) / 1024**2
+
     print(f"    ✓ Saved: {output_path}  shape={cube.shape}  ({size_mb:.1f} MB)")
 
     # Return instrument name and date of first frame for filename construction
