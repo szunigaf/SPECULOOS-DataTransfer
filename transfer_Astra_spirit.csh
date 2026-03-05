@@ -129,7 +129,7 @@ if ("$1" == "") then
 	    echo ""
 
 	echo "Running create_datacubes.py..."
-	    python3 ${PYTHON_SCRIPTS_PATH}/create_datacubes.py $data_dir/$date $eso_dir
+	    python3 ${PYTHON_SCRIPTS_PATH}/create_datacubes.py $data_dir/$date $data_dir/$date
 	    echo ""
 
         if  (! -e $log_dir/$date) then
@@ -144,12 +144,30 @@ if ("$1" == "") then
             echo ""
         endif
 
-	    echo " Making a list of the final transferred files (list in the $log_dir/$date folder)"
-	    set filelist3=$log_dir/$date/transferred
-	    find $eso_dir -maxdepth 1 -name "SPECULOOS*${date}*fits" -type f -exec basename {} \; > $filelist3
+	    echo " Moving datacubes to ESO directory "
+	    set cubes_expected=$log_dir/$date/cubes_created
+	    find $data_dir/$date -maxdepth 1 \( -name "SPECULOOS*_science_*.fits" -o -name "SPECULOOS*_calib_*.fits" \) -type f -exec basename {} \; > $cubes_expected
+	    find $data_dir/$date -maxdepth 1 -name "SPECULOOS*_science_*.fits" -o -name "SPECULOOS*_calib_*.fits" | xargs -I{} mv {} $eso_dir/.
 	    echo ""
 
-	    echo " Logging the number of transferred files into the global log file ($log_dir/transfer_log.txt) "
+	    echo " Making a list of the transferred datacubes (list in the $log_dir/$date folder)"
+	    set filelist3=$log_dir/$date/transferred
+	    find $eso_dir -maxdepth 1 \( -name "SPECULOOS*_science_*.fits" -o -name "SPECULOOS*_calib_*.fits" \) -newer $log_dir/$date -type f -exec basename {} \; > $filelist3
+	    echo ""
+
+	    echo " Checking for datacubes that failed to transfer "
+	    set filelist4=$log_dir/$date/non_transferred
+	    find $data_dir/$date -maxdepth 1 \( -name "SPECULOOS*_science_*.fits" -o -name "SPECULOOS*_calib_*.fits" \) -type f -exec basename {} \; > $filelist4
+	    set num_bad_files=`wc -l < "$filelist4"`
+	    if ($num_bad_files != 0) then
+	        echo " Warning: $num_bad_files datacube(s) failed to transfer to ESO "
+	        python3 ${PYTHON_SCRIPTS_PATH}/mail_alert.py $telescope_name $num_bad_files
+	    else
+	        echo " All datacubes transferred successfully to ESO "
+	    endif
+	    echo ""
+
+	    echo " Logging the number of transferred datacubes into the global log file ($log_dir/transfer_log.txt) "
 	    set logfile=$log_dir/transfer_log.txt
 	    set count=`wc -l < "$filelist3"`
 	    echo $date $count >> $logfile
@@ -240,7 +258,7 @@ else
 	    echo ""
 
 	    echo "Running create_datacubes.py..."
-	    python3 ${PYTHON_SCRIPTS_PATH}/create_datacubes.py $data_dir/$date $eso_dir
+	    python3 ${PYTHON_SCRIPTS_PATH}/create_datacubes.py $data_dir/$date $data_dir/$date
 	    echo ""
 
         if  (! -e $log_dir/$date) then
@@ -255,12 +273,30 @@ else
             echo ""
         endif
 
-	    echo " Making a list of the final transferred files (list in the $log_dir/$date folder)"
-	    set filelist3=$log_dir/$date/transferred
-	    find $eso_dir -maxdepth 1 -name "SPECULOOS*${date}*fits" -type f -exec basename {} \; > $filelist3
+	    echo " Moving datacubes to ESO directory "
+	    set cubes_expected=$log_dir/$date/cubes_created
+	    find $data_dir/$date -maxdepth 1 \( -name "SPECULOOS*_science_*.fits" -o -name "SPECULOOS*_calib_*.fits" \) -type f -exec basename {} \; > $cubes_expected
+	    find $data_dir/$date -maxdepth 1 -name "SPECULOOS*_science_*.fits" -o -name "SPECULOOS*_calib_*.fits" | xargs -I{} mv {} $eso_dir/.
 	    echo ""
 
-	    echo " Logging the number of transferred files into the global log file ($log_dir/transfer_log.txt) "
+	    echo " Making a list of the transferred datacubes (list in the $log_dir/$date folder)"
+	    set filelist3=$log_dir/$date/transferred
+	    find $eso_dir -maxdepth 1 \( -name "SPECULOOS*_science_*.fits" -o -name "SPECULOOS*_calib_*.fits" \) -newer $log_dir/$date -type f -exec basename {} \; > $filelist3
+	    echo ""
+
+	    echo " Checking for datacubes that failed to transfer "
+	    set filelist4=$log_dir/$date/non_transferred
+	    find $data_dir/$date -maxdepth 1 \( -name "SPECULOOS*_science_*.fits" -o -name "SPECULOOS*_calib_*.fits" \) -type f -exec basename {} \; > $filelist4
+	    set num_bad_files=`wc -l < "$filelist4"`
+	    if ($num_bad_files != 0) then
+	        echo " Warning: $num_bad_files datacube(s) failed to transfer to ESO "
+	        python3 ${PYTHON_SCRIPTS_PATH}/mail_alert.py $telescope_name $num_bad_files
+	    else
+	        echo " All datacubes transferred successfully to ESO "
+	    endif
+	    echo ""
+
+	    echo " Logging the number of transferred datacubes into the global log file ($log_dir/transfer_log.txt) "
 	    set logfile=$log_dir/transfer_log.txt
 	    set count=`wc -l < "$filelist3"`
 	    echo $date $count >> $logfile

@@ -347,14 +347,19 @@ def create_datacube(file_list, image_type, group_key, output_path):
     # --- WCS pixel units (CUNIT1/2 = spatial axes, CUNIT3 = frame axis) ------
     h['CUNIT1'] = ('pixel', 'Axis 1 units')
     h['CUNIT2'] = ('pixel', 'Axis 2 units')
-    h['CUNIT3'] = ('pixel', 'Axis 3 (frame) units')
+    h['CUNIT3'] = ('frame', 'Axis 3 units (one layer per frame)')
 
     # --- BLANK is only valid for integer arrays (BITPIX > 0) -----------------
     # Remove it if the cube is floating-point; keep it for integer cubes.
     if 'BLANK' in h and not np.issubdtype(cube_dtype, np.integer):
         del h['BLANK']
 
-    # --- DATE-END: last frame DATE-OBS + EXPTIME -------------------------------
+    # --- DATE-OBS: truncate to restricted ISO 8601 (YYYY-MM-DDThh:mm:ss.sss) -
+    # Raw ACP files have 6 sub-second digits; the standard requires exactly 3.
+    if 'DATE-OBS' in h:
+        h['DATE-OBS'] = h['DATE-OBS'][:23]
+
+    # --- DATE-END: last frame DATE-OBS + EXPTIME ------------------------------
     # ISO 8601 restricted: YYYY-MM-DDThh:mm:ss.sss  (exactly 3 decimal digits)
     try:
         last_exptime = exptimes[-1] if exptimes else float(ref_header.get('EXPTIME', 0))
@@ -363,13 +368,37 @@ def create_datacube(file_list, image_type, group_key, output_path):
     except Exception:
         pass  # leave DATE-END as-is if we cannot compute it
 
-    # --- Fix float precision on selected keywords -----------------------------
-    _float_kw_2dp = ('FOCUSTEM', 'DOMEAZ', 'OBJCTAZ', 'OBJCTALT',
-                     'AIRMASS', 'FOCUSPOS', 'AMBTEMP', 'HUMIDITY')
-    for kw in _float_kw_2dp:
+    # --- Float precision ------------------------------------------------------
+    # Sensor / engineering quantities: 3 decimal places is sufficient.
+    _kw_3dp = ('ALTITUDE', 'AZIMUTH', 'FW-POS', 'WINDSPD', 'CCD-TEMP',
+               'CAM-STAT', 'SKYTEMP', 'DOMESTAT', 'SLEWING', 'TRACKING',
+               'DOMPARK', 'FOCUSTEM', 'DOMEAZ', 'OBJCTAZ', 'OBJCTALT',
+               'AIRMASS', 'FOCUSPOS', 'AMBTEMP', 'HUMIDITY', 'DEWPOINT',
+               'LAT-OBS', 'LONG-OBS')
+    for kw in _kw_3dp:
         if kw in h:
             try:
-                h[kw] = round(float(h[kw]), 2)
+                h[kw] = round(float(h[kw]), 3)
+            except (ValueError, TypeError):
+                pass
+
+    # Celestial coordinates and WCS solution: 6 decimal places.
+    _kw_6dp = ('RA', 'DEC', 'CRPIX1', 'CRPIX2', 'CRVAL1', 'CRVAL2',
+               'LONPOLE', 'LATPOLE', 'PC1_1', 'PC1_2', 'PC2_1', 'PC2_2')
+    for kw in _kw_6dp:
+        if kw in h:
+            try:
+                h[kw] = round(float(h[kw]), 6)
+            except (ValueError, TypeError):
+                pass
+
+    # Time keywords: 6 decimal places (preserves ~0.1 s precision for MJD/JD).
+    _kw_time_6dp = ('MJD-OBS', 'MJD-END', 'JD-OBS', 'JD-END',
+                    'HJD-OBS', 'BJD-OBS', 'LST')
+    for kw in _kw_time_6dp:
+        if kw in h:
+            try:
+                h[kw] = round(float(h[kw]), 6)
             except (ValueError, TypeError):
                 pass
 
@@ -397,19 +426,15 @@ def create_datacube(file_list, image_type, group_key, output_path):
     })
     table_hdu = fits.BinTableHDU(meta_table, name='METADATA')
 
-    os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
-    fits.HDUList([primary_hdu, table_hdu]).writeto(output_path, overwrite=True)
-
-    # DATE = actual file-write timestamp (set after writeto so it is meaningful).
+    # DATE = file-write timestamp, set just before writeto so it is meaningful.
     # Format: YYYY-MM-DDThh:mm:ss.sss
-    # CHECKSUM/DATASUM are recomputed here so they are valid for the final file.
     write_time = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.') + \
                  f"{datetime.utcnow().microsecond // 1000:03d}"
-    with fits.open(output_path, mode='update') as hdul:
-        hdul[0].header['DATE'] = (write_time, 'File creation date (UTC)')
-        hdul.flush(output_verify='silentfix')
-        for ext in hdul:
-            ext.add_checksum()
+    h['DATE'] = (write_time, 'File creation date (UTC)')
+
+    os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
+    fits.HDUList([primary_hdu, table_hdu]).writeto(
+        output_path, overwrite=True, checksum=True, output_verify='silentfix')
 
     size_mb = os.path.getsize(output_path) / 1024**2
 
