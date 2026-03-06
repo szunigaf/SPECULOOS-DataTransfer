@@ -252,7 +252,7 @@ else
 
 	echo "Running astrometry.py..."
 	    python3 ${PYTHON_SCRIPTS_PATH}/astrometry_spirit.py $filelist
-	    echo ""	    echo " Making a list of the solved images (infiles_solved.dat)"
+	    echo " Making a list of the solved images (infiles_solved.dat)"
 	    set filelist2=$data_dir/$date/infiles_solved.dat
 	    find $data_dir/$date -maxdepth 1 -name "*fits" -type f > $filelist2
 	    echo ""
