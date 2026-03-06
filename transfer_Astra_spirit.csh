@@ -146,18 +146,26 @@ if ("$1" == "") then
 
 	    echo " Moving datacubes to ESO directory "
 	    set cubes_expected=$log_dir/$date/cubes_created
-	    find $data_dir/$date -maxdepth 1 \( -name "SPECULOOS*_science_*.fits" -o -name "SPECULOOS*_calib_*.fits" \) -type f -exec basename {} \; > $cubes_expected
-	    find $data_dir/$date -maxdepth 1 -name "SPECULOOS*_science_*.fits" -o -name "SPECULOOS*_calib_*.fits" | xargs -I{} mv {} $eso_dir/.
+	    find $data_dir/$date -maxdepth 1 \( -name "SPECU*_S_*.fits" -o -name "SPECU*_C_*.fits" \) -type f -exec basename {} \; > $cubes_expected
+	    find $data_dir/$date -maxdepth 1 \( -name "SPECU*_S_*.fits" -o -name "SPECU*_C_*.fits" \) | xargs -IFILE mv FILE $eso_dir/.
 	    echo ""
 
 	    echo " Making a list of the transferred datacubes (list in the $log_dir/$date folder)"
 	    set filelist3=$log_dir/$date/transferred
-	    find $eso_dir -maxdepth 1 \( -name "SPECULOOS*_science_*.fits" -o -name "SPECULOOS*_calib_*.fits" \) -newer $log_dir/$date -type f -exec basename {} \; > $filelist3
+	    set filelist4=$log_dir/$date/non_transferred
+	    # Check each expected cube by name directly in $eso_dir (mv preserves mtime so -newer is unreliable)
+	    rm -f $filelist3 $filelist4
+	    touch $filelist3 $filelist4
+	    foreach cube (`cat $cubes_expected`)
+		if (-f $eso_dir/$cube) then
+		    echo $cube >> $filelist3
+		else
+		    echo $cube >> $filelist4
+		endif
+	    end
 	    echo ""
 
 	    echo " Checking for datacubes that failed to transfer "
-	    set filelist4=$log_dir/$date/non_transferred
-	    find $data_dir/$date -maxdepth 1 \( -name "SPECULOOS*_science_*.fits" -o -name "SPECULOOS*_calib_*.fits" \) -type f -exec basename {} \; > $filelist4
 	    set num_bad_files=`wc -l < "$filelist4"`
 	    if ($num_bad_files != 0) then
 	        echo " Warning: $num_bad_files datacube(s) failed to transfer to ESO "
@@ -275,18 +283,26 @@ else
 
 	    echo " Moving datacubes to ESO directory "
 	    set cubes_expected=$log_dir/$date/cubes_created
-	    find $data_dir/$date -maxdepth 1 \( -name "SPECULOOS*_science_*.fits" -o -name "SPECULOOS*_calib_*.fits" \) -type f -exec basename {} \; > $cubes_expected
-	    find $data_dir/$date -maxdepth 1 -name "SPECULOOS*_science_*.fits" -o -name "SPECULOOS*_calib_*.fits" | xargs -I{} mv {} $eso_dir/.
+	    find $data_dir/$date -maxdepth 1 \( -name "SPECU*_S_*.fits" -o -name "SPECU*_C_*.fits" \) -type f -exec basename {} \; > $cubes_expected
+	    find $data_dir/$date -maxdepth 1 \( -name "SPECU*_S_*.fits" -o -name "SPECU*_C_*.fits" \) | xargs -IFILE mv FILE $eso_dir/.
 	    echo ""
 
 	    echo " Making a list of the transferred datacubes (list in the $log_dir/$date folder)"
 	    set filelist3=$log_dir/$date/transferred
-	    find $eso_dir -maxdepth 1 \( -name "SPECULOOS*_science_*.fits" -o -name "SPECULOOS*_calib_*.fits" \) -newer $log_dir/$date -type f -exec basename {} \; > $filelist3
+	    set filelist4=$log_dir/$date/non_transferred
+	    # Check each expected cube by name directly in $eso_dir (mv preserves mtime so -newer is unreliable)
+	    rm -f $filelist3 $filelist4
+	    touch $filelist3 $filelist4
+	    foreach cube (`cat $cubes_expected`)
+		if (-f $eso_dir/$cube) then
+		    echo $cube >> $filelist3
+		else
+		    echo $cube >> $filelist4
+		endif
+	    end
 	    echo ""
 
 	    echo " Checking for datacubes that failed to transfer "
-	    set filelist4=$log_dir/$date/non_transferred
-	    find $data_dir/$date -maxdepth 1 \( -name "SPECULOOS*_science_*.fits" -o -name "SPECULOOS*_calib_*.fits" \) -type f -exec basename {} \; > $filelist4
 	    set num_bad_files=`wc -l < "$filelist4"`
 	    if ($num_bad_files != 0) then
 	        echo " Warning: $num_bad_files datacube(s) failed to transfer to ESO "

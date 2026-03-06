@@ -15,19 +15,24 @@ Grouping rules
     Dark frames     : exposure time (EXPTIME)
     Bias frames     : all together in one cube
 
-One datacube is produced per unique group. The output filename follows the
-ESO naming convention of the processed files:
+One datacube is produced per unique group. The output filename uses a compact
+format aligned with the ESO archive SPECU# convention:
 
-    {INSTRUME}.{DATE-OBS_first_frame}_{science|calib}_{group_key}.fits
+    {SPECU#}.{YYYYMMDD}T{HHMMSS}_{S|C}_{group_key}.fits
+
+    where S = Science, C = Calibration (Flat/Dark/Bias)
 
     Example:
-        SPECULOOS2.2026-02-23T01_47_41_science_ch_TIC46432937b_i'_20s.fits
-        SPECULOOS2.2026-02-23T01_47_41_calib_flat_i'_5s.fits
-        SPECULOOS2.2026-02-23T01_47_41_calib_dark_300s.fits
-        SPECULOOS2.2026-02-23T01_47_41_calib_bias.fits
+        SPECU2.20260223T014741_S_TIC46432937b_i_20s.fits
+        SPECU2.20260223T014741_C_flat_i_5s.fits
+        SPECU2.20260223T014741_C_dark_300s.fits
+        SPECU2.20260223T014741_C_bias.fits
+
+This keeps filenames short enough so that ORIGFILE FITS keyword records
+(max 80 characters) are never truncated by the ESO science archive ingestion.
 
 If INSTRUME is absent from the header (e.g. raw files before headerfix.py),
-a simplified name is used: science_{group_key}.fits / calib_{group_key}.fits
+a simplified name is used: S_{group_key}.fits / C_{group_key}.fits
 
 Output file structure
 ---------------------
@@ -70,7 +75,7 @@ Dependencies
     numpy >= 1.20
 
 Created on Feb 17 2026
-Revised on Feb 27 2026
+Revised on Mar 06 2026
 
 @author: Seba Zuniga-Fernandez
 """
@@ -129,6 +134,18 @@ def get_image_type(header):
     return None
 
 
+def format_exptime(exptime):
+    """
+    Format exposure time for use in filenames.
+    Rounds to 3 decimal places and strips trailing zeros and unnecessary
+    decimal point (e.g. 20.0 -> '20', 0.500 -> '0.5', 1.234567 -> '1.235').
+    """
+    rounded = round(float(exptime), 3)
+    # Use fixed-point with 3 decimals then strip trailing zeros
+    s = f"{rounded:.3f}".rstrip('0').rstrip('.')
+    return s
+
+
 def get_group_key(image_type, header):
     """
     Build a grouping key from header keywords.
@@ -146,16 +163,16 @@ def get_group_key(image_type, header):
     if image_type == 'science':
         target  = header.get('OBJECT',  'UNKNOWN').strip().replace(' ', '_')
         filt    = header.get('FILTER',  'UNKNOWN').strip().replace(' ', '_')
-        exptime = header.get('EXPTIME', 0)
+        exptime = format_exptime(header.get('EXPTIME', 0))
         return f"{target}__{filt}__{exptime}s"
 
     elif image_type == 'flat':
         filt    = header.get('FILTER',  'UNKNOWN').strip().replace(' ', '_')
-        exptime = header.get('EXPTIME', 0)
+        exptime = format_exptime(header.get('EXPTIME', 0))
         return f"flat__{filt}__{exptime}s"
 
     elif image_type == 'dark':
-        exptime = header.get('EXPTIME', 0)
+        exptime = format_exptime(header.get('EXPTIME', 0))
         return f"dark__{exptime}s"
 
     elif image_type == 'bias':
@@ -448,30 +465,37 @@ def create_datacube(file_list, image_type, group_key, output_path):
 
 def build_output_name(image_type, group_key, instrume='', first_date=''):
     """
-    Build output filename matching the ESO naming convention:
-        INSTRUME.DATE_groupkey.fits
+    Build a compact output filename aligned with the ESO archive SPECU# convention.
 
-    The date is taken from DATE-OBS of the first frame and formatted as
-    YYYY-MM-DDTHH_MM_SS (colons replaced with underscores, fractional seconds
-    stripped) to keep it filesystem-safe.
+    Format:
+        {SPECU#}.{YYYYMMDD}T{HHMMSS}_{S|C}_{group_key}.fits
+
+    - INSTRUME 'SPECULOOS2' -> 'SPECU2'  (drops 'LOOS', keeps the digit)
+    - Date compacted from '2026-02-23T01:47:41' -> '20260223T014741'
+    - Type code: 'S' for science, 'C' for calibration
+    - Double underscores in group_key collapsed to single
 
     Examples
     --------
-    science  SPECULOOS2  2026-02-23T01:47:41  ch_TIC46432937b__i'__20s
-        -> SPECULOOS2.2026-02-23T01_47_41_science_ch_TIC46432937b_i'_20s.fits
+    science  SPECULOOS2  2026-02-23T01:47:41  TIC46432937b__i'__20s
+        -> SPECU2.20260223T014741_S_TIC46432937b_i'_20s.fits  (49 chars)
 
     calib    SPECULOOS2  2026-02-23T01:47:41  flat__i'__5s
-        -> SPECULOOS2.2026-02-23T01_47_41_calib_flat_i'_5s.fits
+        -> SPECU2.20260223T014741_C_flat_i'_5s.fits  (40 chars)
 
-    If INSTRUME or date are not available the old simple name is used.
+    If INSTRUME or date are not available a minimal fallback name is used.
     """
     clean = group_key.replace('__', '_')
-    label = 'science' if image_type == 'science' else 'calib'
+    label = 'S' if image_type == 'science' else 'C'
 
     if instrume and first_date:
-        # Format date: replace colons and strip sub-seconds  ->  2026-02-23T01_47_41
-        date_str = first_date.split('.')[0].replace(':', '_')
-        return f"{instrume}.{date_str}_{label}_{clean}.fits"
+        # Shorten SPECULOOS# -> SPECU#  (e.g. SPECULOOS2 -> SPECU2)
+        short_instr = instrume.replace('SPECULOOS', 'SPECU')
+        # Compact date: '2026-02-23T01:47:41.123' -> '20260223T014741'
+        dt = first_date.split('.')[0]          # strip sub-seconds
+        date_part, time_part = dt.split('T')
+        compact_date = date_part.replace('-', '') + 'T' + time_part.replace(':', '')
+        return f"{short_instr}.{compact_date}_{label}_{clean}.fits"
 
     # Fallback (no instrument info in header)
     return f"{label}_{clean}.fits"
