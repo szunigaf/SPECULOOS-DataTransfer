@@ -212,8 +212,10 @@ def scan_directory(input_dir):
     """
     Recursively scan a directory and classify all FITS files.
 
-    Files within each group are sorted by DATE-OBS header value so that
-    layers in the datacube are in chronological (successive) order.
+    Each file is opened once (header only) to determine its type and group.
+    Chronological sorting by DATE-OBS is done inside create_datacube at
+    stacking time, where the full header is already being read for pixel data,
+    avoiding a second round of file opens.
 
     Returns
     -------
@@ -229,21 +231,14 @@ def scan_directory(input_dir):
 
     print(f"Found {len(fits_files)} FITS files\n")
 
-    # Each entry: {'type': str, 'files': [(date_obs, filepath), ...]}
     groups = defaultdict(lambda: {'type': None, 'files': []})
 
     for filepath in fits_files:
-        image_type, group_key, header = classify_fits_file(filepath)
+        image_type, group_key, _ = classify_fits_file(filepath)
         if image_type is None:
             continue
-        date_obs = str(header.get('DATE-OBS', '')) if header is not None else ''
         groups[group_key]['type'] = image_type
-        groups[group_key]['files'].append((date_obs, filepath))
-
-    # Sort each group by DATE-OBS (chronological order = successive frames)
-    for val in groups.values():
-        val['files'].sort(key=lambda x: x[0])
-        val['files'] = [fp for _, fp in val['files']]  # strip date, keep path
+        groups[group_key]['files'].append(filepath)
 
     # Print summary
     print("=== Classification Summary ===")
@@ -288,69 +283,91 @@ def create_datacube(file_list, image_type, group_key, output_path):
 
     print(f"  {group_key}  ({n} frames)...")
 
-    # Read first frame for reference shape and header
-    try:
-        with fits.open(file_list[0]) as hdul:
-            ref_data   = hdul[0].data
-            ref_header = hdul[0].header.copy()
-    except Exception as e:
-        print(f"  Error reading reference frame: {e}")
-        return False, '', ''
+    # ------------------------------------------------------------------
+    # Single-pass approach — one fits.open() per file, no pre-allocation:
+    #
+    #   • memmap=False is mandatory: raw FITS files carry BZERO/BSCALE/BLANK
+    #     which astropy cannot apply lazily over a memory-map.  On a local
+    #     disk this raises an immediate exception; on NFS-mounted storage it
+    #     can block indefinitely (observed hang of several hours).
+    #
+    #   • Frames are appended to a plain Python list and stacked with
+    #     np.stack() at the end.  This avoids pre-allocating the full
+    #     (N, Y, X) array up-front — at ~8 MB/frame × 300+ frames that
+    #     would require >2 GB of contiguous RAM before a single frame is
+    #     read, potentially triggering swap on the server.
+    #
+    #   • DATE-OBS is collected in the same loop, so no second round of
+    #     file-opens is needed.  Chronological sorting is done once in
+    #     memory after all frames are collected.
+    #
+    #   • The reference header comes from the first successfully read frame,
+    #     also inside this loop — no separate preliminary open required.
+    # ------------------------------------------------------------------
 
-    if ref_data is None:
-        print(f"  Error: no image data in {file_list[0]}")
-        return False, '', ''
-
-    ny, nx = ref_data.shape
-    # Preserve the native dtype of the raw data:
-    #   raw ACP frames are uint16 (BITPIX=16) → cube stays integer
-    #   ESO-processed frames are typically float32 (BITPIX=-32) → cube stays float
-    cube_dtype = ref_data.dtype
-    cube = np.zeros((n, ny, nx), dtype=cube_dtype)
-
-    # Per-frame metadata
+    frames_list = []          # list of 2-D ndarray, one per valid frame
     filenames, dates, exptimes, filters_, objects_, airmasses = [], [], [], [], [], []
-
-    valid = 0
+    ref_header  = None        # header of the first valid frame
+    ny = nx = None            # reference shape, determined on first valid frame
+    cube_dtype  = None        # native dtype,   determined on first valid frame
     skipped_shape = 0
+
     for fpath in file_list:
         try:
-            with fits.open(fpath) as hdul:
+            with fits.open(fpath, memmap=False) as hdul:
                 data   = hdul[0].data
-                header = hdul[0].header
-
-            if data is None:
-                print(f"    Warning: no data in {os.path.basename(fpath)}, skipping")
-                continue
-
-            if data.shape != (ny, nx):
-                print(f"    Warning: shape mismatch {data.shape} vs {(ny,nx)} "
-                      f"in {os.path.basename(fpath)}, skipping")
-                skipped_shape += 1
-                continue
-
-            cube[valid] = data.astype(cube_dtype)
-
-            filenames.append(os.path.basename(fpath))
-            dates.append(str(header.get('DATE-OBS', '')))
-            exptimes.append(float(header.get('EXPTIME', 0)))
-            filters_.append(str(header.get('FILTER', '')))
-            objects_.append(str(header.get('OBJECT', '')))
-            airmasses.append(float(header.get('AIRMASS', 0) or 0))
-
-            valid += 1
-
+                header = hdul[0].header.copy()
         except Exception as e:
             print(f"    Error reading {os.path.basename(fpath)}: {e}")
+            continue
+
+        if data is None:
+            print(f"    Warning: no data in {os.path.basename(fpath)}, skipping")
+            continue
+
+        # Establish reference dimensions from the first valid frame
+        if ref_header is None:
+            ref_header = header
+            ny, nx     = data.shape
+            # Preserve native dtype:
+            #   raw ACP  → uint16  (BITPIX=16)
+            #   ESO-proc → float32 (BITPIX=-32)
+            cube_dtype = data.dtype
+
+        if data.shape != (ny, nx):
+            print(f"    Warning: shape mismatch {data.shape} vs {(ny, nx)} "
+                  f"in {os.path.basename(fpath)}, skipping")
+            skipped_shape += 1
+            continue
+
+        frames_list.append(data.astype(cube_dtype))
+        filenames.append(os.path.basename(fpath))
+        dates.append(str(header.get('DATE-OBS', '')))
+        exptimes.append(float(header.get('EXPTIME', 0)))
+        filters_.append(str(header.get('FILTER', '')))
+        objects_.append(str(header.get('OBJECT', '')))
+        airmasses.append(float(header.get('AIRMASS', 0) or 0))
 
     if skipped_shape > 0:
         print(f"    Warning: {skipped_shape} frame(s) skipped due to shape mismatch "
               f"(expected {ny}x{nx})")
-    if valid == 0:
+    if not frames_list:
         print(f"  Error: no valid frames for {group_key}")
         return False, '', ''
 
-    cube = cube[:valid]  # Trim to valid frames
+    # Sort all collected data chronologically by DATE-OBS — purely in memory,
+    # no additional file I/O.
+    order       = sorted(range(len(dates)), key=lambda i: dates[i])
+    frames_list = [frames_list[i] for i in order]
+    filenames   = [filenames[i]   for i in order]
+    dates       = [dates[i]       for i in order]
+    exptimes    = [exptimes[i]    for i in order]
+    filters_    = [filters_[i]    for i in order]
+    objects_    = [objects_[i]    for i in order]
+    airmasses   = [airmasses[i]   for i in order]
+
+    # Stack list of 2-D frames into a single 3-D cube (N, Y, X)
+    cube = np.stack(frames_list, axis=0)
 
     # Primary HDU with updated header
     primary_hdu = fits.PrimaryHDU(data=cube, header=ref_header)
