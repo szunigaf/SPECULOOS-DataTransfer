@@ -366,12 +366,34 @@ def create_datacube(file_list, image_type, group_key, output_path):
     objects_    = [objects_[i]    for i in order]
     airmasses   = [airmasses[i]   for i in order]
 
-    # Stack list of 2-D frames into a single 3-D cube (N, Y, X)
-    cube = np.stack(frames_list, axis=0)
+    # ----------------------------------------------------------------
+    # Streaming write: avoid building the full cube in RAM.
+    #
+    # np.stack() + PrimaryHDU(data=cube) requires TWO full-cube
+    # allocations — one for the native-dtype cube and one for the
+    # big-endian byteswap that astropy performs during writeto().
+    # For ~2800 frames × 1280×1024 int16 that is 2 × 7 GB = 14 GB.
+    #
+    # Instead we:
+    #   1. Write a header-only stub (data=None) to create the file.
+    #   2. Memory-map the data region and fill it one frame at a time.
+    # Peak RAM is one frame (~2.6 MB) rather than the full cube.
+    # ----------------------------------------------------------------
+    valid = len(frames_list)
+    n_frames = valid
 
-    # Primary HDU with updated header
-    primary_hdu = fits.PrimaryHDU(data=cube, header=ref_header)
+    # Build and patch the header before opening the file
+    primary_hdu = fits.PrimaryHDU(data=None, header=ref_header)
     h = primary_hdu.header
+    # Set correct NAXIS/BITPIX for the 3-D cube we are about to write
+    bitpix_map = {np.dtype('int16'): 16, np.dtype('uint16'): 16,
+                  np.dtype('int32'): 32, np.dtype('float32'): -32,
+                  np.dtype('float64'): -64}
+    h['BITPIX'] = bitpix_map.get(np.dtype(cube_dtype), 16)
+    h['NAXIS']  = 3
+    h['NAXIS1'] = nx
+    h['NAXIS2'] = ny
+    h['NAXIS3'] = n_frames
 
     # --- WCS axes -------------------------------------------------------------
     # WCSAXES must match the actual number of array dimensions (3 for a cube).
@@ -467,12 +489,28 @@ def create_datacube(file_list, image_type, group_key, output_path):
     h['DATE'] = (write_time, 'File creation date (UTC)')
 
     os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
+
+    # Write header-only stub + metadata table first (no pixel data yet)
     fits.HDUList([primary_hdu, table_hdu]).writeto(
-        output_path, overwrite=True, checksum=True, output_verify='silentfix')
+        output_path, overwrite=True, output_verify='silentfix')
+
+    # Memory-map the pixel data region and fill frame by frame
+    # numpy uses native byte order; FITS requires big-endian, so byteswap
+    # each frame individually (tiny allocation: one frame at a time).
+    with fits.open(output_path, mode='update') as hdul:
+        # Re-open to get the correct data offset, then mmap the file
+        data_offset = hdul[0]._data_offset
+
+    fits_dtype = np.dtype(cube_dtype).newbyteorder('>')
+    mm = np.memmap(output_path, dtype=fits_dtype, mode='r+',
+                   offset=data_offset, shape=(n_frames, ny, nx))
+    for i, frame in enumerate(frames_list):
+        mm[i] = frame.astype(fits_dtype)
+    mm.flush()
+    del mm  # release memmap before re-opening
 
     size_mb = os.path.getsize(output_path) / 1024**2
-
-    print(f"    ✓ Saved: {output_path}  shape={cube.shape}  ({size_mb:.1f} MB)")
+    print(f"    ✓ Saved: {output_path}  shape=({n_frames}, {ny}, {nx})  ({size_mb:.1f} MB)")
 
     # Return instrument name and date of first frame for filename construction
     instrume   = ref_header.get('INSTRUME', '').strip()
