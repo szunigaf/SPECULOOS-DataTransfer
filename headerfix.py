@@ -53,38 +53,58 @@ def apply_correct(filename):
         with fits.open(filename, do_not_scale_image_data=True) as infile:    
         
             #PA computation (not a standard output of the astrometric solving)
+            # Raw frames from ACP/PinPoint carry a PCi_j + CDELTi WCS convention.
+            # We compute PA from that matrix and must NOT add CDi_j keywords,
+            # which would create a forbidden mix of both WCS conventions.
             if infile[0].header['IMAGETYP'] == 'Light Frame':
-                if 'CD1_1' in infile[0].header:
+                # Prefer PCi_j convention (written by ACP/PinPoint and astrometry.net)
+                if 'PC1_1' in infile[0].header:
+                    cdelt1 = float(infile[0].header.get('CDELT1', 1.0))
+                    cdelt2 = float(infile[0].header.get('CDELT2', 1.0))
+                    pc11 = infile[0].header['PC1_1'] * cdelt1
+                    pc12 = infile[0].header['PC1_2'] * cdelt1
+                    pc21 = infile[0].header['PC2_1'] * cdelt2
+                    pc22 = infile[0].header['PC2_2'] * cdelt2
+                    det = (pc11*pc22) - (pc12*pc21)
+                    parity = 1. if det >= 0 else -1.
+                    T = parity * pc11 + pc22
+                    A = parity * pc21 - pc12
+                    orient = 180 - math.degrees(math.atan2(A, T))
+                    infile[0].header['PA'] = (orient, '[deg, 0-360 CCW] Position angle of plate')
+                # Fall back to CDi_j convention (older solver output)
+                elif 'CD1_1' in infile[0].header:
                     cd11 = infile[0].header['CD1_1']
                     cd12 = infile[0].header['CD1_2']
                     cd21 = infile[0].header['CD2_1']
                     cd22 = infile[0].header['CD2_2']
                     det = (cd11*cd22) - (cd12*cd21)
-                    if det >= 0:
-                        parity = 1.
-                    else:
-                        parity = -1.
+                    parity = 1. if det >= 0 else -1.
                     T = parity * cd11 + cd22
                     A = parity * cd21 - cd12
-                    orient = 180-math.degrees(math.atan2(A, T))
-                    infile[0].header['PA'] = (orient,'[deg, 0-360 CCW] Position angle of plate')
-                    infile[0].header['CD1_1'] = (cd11,'Transformation matrix')  #Update the description of the CDX_X KWDs
-                    infile[0].header['CD2_2'] = (cd22,'Transformation matrix')
-                    infile[0].header['CD1_2'] = (cd12,'Transformation matrix')
-                    infile[0].header['CD2_1'] = (cd21,'Transformation matrix')  
- 
-            #WCS KWDs for bias, dark and flat frames as requested by ESO       
-            if infile[0].header['IMAGETYP'] == 'Bias Frame' or infile[0].header['IMAGETYP'] == 'Dark Frame' or infile[0].header['IMAGETYP'] == 'FLAT' or infile[0].header['IMAGETYP'] == 'Flat Frame':
-                infile[0].header['CTYPE1'] = ('PIXEL','X-axis coordinate type')
-                infile[0].header['CTYPE2'] = ('PIXEL','Y-axis coordinate type')
-                infile[0].header['CRPIX1'] = (1.0,'X-axis reference pixel')
-                infile[0].header['CRPIX2'] = (1.0,'Y-axis reference pixel')  
-                infile[0].header['CRVAL1'] = (1.0,'X-axis coordinate value')  
-                infile[0].header['CRVAL2'] = (1.0,'Y-axis coordinate value') 
-                infile[0].header['CD1_1'] = (1.0,'Transformation matrix')
-                infile[0].header['CD2_2'] = (1.0,'Transformation matrix')
-                infile[0].header['CD1_2'] = (0.0,'Transformation matrix')  
-                infile[0].header['CD2_1'] = (0.0,'Transformation matrix')  
+                    orient = 180 - math.degrees(math.atan2(A, T))
+                    infile[0].header['PA'] = (orient, '[deg, 0-360 CCW] Position angle of plate')
+
+            # WCS KWDs for bias, dark and flat frames as requested by ESO.
+            # Use PCi_j + CDELTi convention (consistent with science frames from ACP).
+            # CDi_j is intentionally NOT used to avoid mixing both conventions.
+            if infile[0].header['IMAGETYP'] in ('Bias Frame', 'Dark Frame', 'FLAT', 'Flat Frame'):
+                infile[0].header['WCSAXES'] = (2,   'Number of WCS axes')
+                infile[0].header['CTYPE1']  = ('PIXEL', 'X-axis coordinate type')
+                infile[0].header['CTYPE2']  = ('PIXEL', 'Y-axis coordinate type')
+                infile[0].header['CRPIX1']  = (1.0, 'X-axis reference pixel')
+                infile[0].header['CRPIX2']  = (1.0, 'Y-axis reference pixel')
+                infile[0].header['CRVAL1']  = (1.0, 'X-axis coordinate value')
+                infile[0].header['CRVAL2']  = (1.0, 'Y-axis coordinate value')
+                infile[0].header['CDELT1']  = (1.0, 'X-axis scale [pixel]')
+                infile[0].header['CDELT2']  = (1.0, 'Y-axis scale [pixel]')
+                infile[0].header['PC1_1']   = (1.0, 'Transformation matrix element')
+                infile[0].header['PC1_2']   = (0.0, 'Transformation matrix element')
+                infile[0].header['PC2_1']   = (0.0, 'Transformation matrix element')
+                infile[0].header['PC2_2']   = (1.0, 'Transformation matrix element')
+                # Remove CDi_j keywords if they were carried over from a previous run
+                for _kw in ('CD1_1', 'CD1_2', 'CD2_1', 'CD2_2'):
+                    if _kw in infile[0].header:
+                        infile[0].header.remove(_kw)
             
             #KWDs that are different for each telescope 
             #The classification based on the TELESCOP KWD does not work for calib images as the TELESCOP KWD is empty in this case, 

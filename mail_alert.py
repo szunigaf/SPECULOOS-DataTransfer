@@ -12,10 +12,10 @@ Revised on Feb 17 2026
 import sys
 import os
 import smtplib
-from dotenv import load_dotenv
 
-# Load environment variables from .env file
-load_dotenv()
+# Credentials are loaded from .credentials.csh by the calling shell script
+# (transfer_Astra.csh / transfer_Astra_spirit.csh) before this script runs,
+# so all variables are already present in os.environ — no .env file needed.
 
 
 ###############

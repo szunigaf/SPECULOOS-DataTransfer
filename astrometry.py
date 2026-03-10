@@ -46,6 +46,28 @@ else:
     ASTROMETRY_AVAILABLE = True
 
 
+def is_already_solved(filename):
+    """
+    Return True if the file already contains a sky WCS solution.
+
+    A frame is considered solved when it has CTYPE1 starting with 'RA'
+    together with at least one rotation matrix keyword (PCi_j or CDi_j).
+    This covers both the PCi_j convention (written by ACP/PinPoint and
+    astrometry.net) and the older CDi_j convention.
+    """
+    try:
+        with fits.open(filename, memmap=False) as hdul:
+            h = hdul[0].header
+            ctype1 = str(h.get('CTYPE1', '')).upper()
+            has_sky_ctype = ctype1.startswith('RA') or ctype1.startswith('DEC')
+            has_pc = any(k.startswith('PC') for k in h.keys())
+            has_cd = any(k.startswith('CD') and not k.startswith('CDELT')
+                         for k in h.keys())
+            return has_sky_ctype and (has_pc or has_cd)
+    except Exception:
+        return False
+
+
 def solve_astrometry(filenameold):
     #images have to be fits not fts (otherwise astrometry not working)
     
@@ -66,6 +88,11 @@ def solve_astrometry(filenameold):
     else:
         # File already has .fits extension or other extension
         filename = filenameold
+
+    # Skip solve-field if the frame already has a sky WCS (e.g. from ACP/PinPoint)
+    if is_already_solved(filename):
+        print("Already solved, skipping astrometry: " + os.path.basename(filename))
+        return
     
     filenameb=filename
     try:

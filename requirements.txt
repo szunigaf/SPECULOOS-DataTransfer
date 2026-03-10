@@ -4,8 +4,5 @@
 # For reading/writing FITS files and astronomical calculations
 astropy>=5.0
 
-# For loading environment variables from .env file
-python-dotenv>=0.19.0
-
 # For numerical operations (required by astropy for datacube operations)
 numpy>=1.20.0

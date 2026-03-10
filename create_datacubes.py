@@ -395,15 +395,60 @@ def create_datacube(file_list, image_type, group_key, output_path):
     h['NAXIS2'] = ny
     h['NAXIS3'] = n_frames
 
-    # --- WCS axes -------------------------------------------------------------
-    # WCSAXES must match the actual number of array dimensions (3 for a cube).
-    # The value carried over from a 2D frame header is wrong (usually 0 or 2).
-    h['WCSAXES'] = (3, 'Number of WCS axes')
+    # --- WCS: strip 2D sky WCS and write a clean 3D pixel WCS ---------------
+    # The cube header is copied from the first science frame which carries a
+    # full sky WCS (RA---TAN / DEC--TAN + PCi_j or CDi_j) written by
+    # ACP/PinPoint.  That 2D sky WCS is meaningless for a 3D pixel cube and
+    # must be completely removed before writing the new 3D pixel WCS.
+    #
+    # FITS WCS Paper I rules that must be satisfied:
+    #   1. WCSAXES must appear BEFORE any other WCS keyword.
+    #   2. PCi_j and CDi_j are mutually exclusive — never mix them.
+    #   3. WCSAXES value sets the valid axis index range (1..WCSAXES).
+    #
+    # Strategy: delete every 2D WCS keyword, then insert WCSAXES=3 immediately
+    # after NAXIS3 (so it precedes all other WCS keywords), then append the
+    # remaining 3D pixel WCS keywords in order.
+    _wcs2d_to_remove = (
+        'WCSAXES',
+        'CTYPE1', 'CTYPE2',
+        'CUNIT1', 'CUNIT2',
+        'CRPIX1', 'CRPIX2',
+        'CRVAL1', 'CRVAL2',
+        'CDELT1', 'CDELT2',
+        'PC1_1', 'PC1_2', 'PC2_1', 'PC2_2',
+        'CD1_1', 'CD1_2', 'CD2_1', 'CD2_2',
+        'LONPOLE', 'LATPOLE',
+        'RADESYS', 'EQUINOX',
+    )
+    for _kw in _wcs2d_to_remove:
+        while _kw in h:
+            del h[_kw]
 
-    # --- WCS pixel units (CUNIT1/2 = spatial axes, CUNIT3 = frame axis) ------
+    # Insert WCSAXES=3 immediately after NAXIS3 so it precedes all WCS keywords
+    try:
+        naxis3_idx = h.index('NAXIS3')
+        h.insert(naxis3_idx + 1,
+                 fits.Card('WCSAXES', 3, 'Number of WCS axes'))
+    except (KeyError, ValueError):
+        h['WCSAXES'] = (3, 'Number of WCS axes')
+
+    # Append the 3D pixel WCS keywords (WCSAXES already set above)
+    h['CTYPE1'] = ('PIXEL', 'Axis 1 type (column index)')
+    h['CTYPE2'] = ('PIXEL', 'Axis 2 type (row index)')
+    h['CTYPE3'] = ('PIXEL', 'Axis 3 type (frame index)')
     h['CUNIT1'] = ('pixel', 'Axis 1 units')
     h['CUNIT2'] = ('pixel', 'Axis 2 units')
     h['CUNIT3'] = ('frame', 'Axis 3 units (one layer per frame)')
+    h['CRPIX1'] = (1.0, 'Reference pixel axis 1')
+    h['CRPIX2'] = (1.0, 'Reference pixel axis 2')
+    h['CRPIX3'] = (1.0, 'Reference pixel axis 3')
+    h['CRVAL1'] = (1.0, 'Reference value axis 1 [pixel]')
+    h['CRVAL2'] = (1.0, 'Reference value axis 2 [pixel]')
+    h['CRVAL3'] = (1.0, 'Reference value axis 3 [frame]')
+    h['CDELT1'] = (1.0, 'Pixel scale axis 1')
+    h['CDELT2'] = (1.0, 'Pixel scale axis 2')
+    h['CDELT3'] = (1.0, 'Frame scale axis 3')
 
     # --- BLANK is only valid for integer arrays (BITPIX > 0) -----------------
     # Remove it if the cube is floating-point; keep it for integer cubes.
@@ -438,10 +483,10 @@ def create_datacube(file_list, image_type, group_key, output_path):
             except (ValueError, TypeError):
                 pass
 
-    # Celestial coordinates and WCS solution: 6 decimal places.
-    _kw_6dp = ('RA', 'DEC', 'CRPIX1', 'CRPIX2', 'CRVAL1', 'CRVAL2',
-               'LONPOLE', 'LATPOLE', 'PC1_1', 'PC1_2', 'PC2_1', 'PC2_2')
-    for kw in _kw_6dp:
+    # Celestial coordinates: 6 decimal places.
+    # Note: CRPIX/CRVAL/PCi_j are NOT rounded here — the 2D sky WCS was
+    # stripped above and replaced with integer pixel WCS values.
+    for kw in ('RA', 'DEC'):
         if kw in h:
             try:
                 h[kw] = round(float(h[kw]), 6)
@@ -490,15 +535,19 @@ def create_datacube(file_list, image_type, group_key, output_path):
 
     os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
 
-    # Write header-only stub + metadata table first (no pixel data yet)
-    fits.HDUList([primary_hdu, table_hdu]).writeto(
+    # Write a correctly-shaped stub filled with zeros so that astropy writes
+    # the right NAXIS/NAXIS1/2/3 values into the file header.
+    # (PrimaryHDU(data=None) forces NAXIS=0, stripping NAXISi keywords.)
+    stub = np.zeros((n_frames, ny, nx), dtype=cube_dtype)
+    stub_hdu = fits.PrimaryHDU(data=stub, header=h)
+    fits.HDUList([stub_hdu, table_hdu]).writeto(
         output_path, overwrite=True, output_verify='silentfix')
+    del stub  # free RAM immediately — data region will be overwritten below
 
-    # Memory-map the pixel data region and fill frame by frame
+    # Memory-map the pixel data region and fill frame by frame.
     # numpy uses native byte order; FITS requires big-endian, so byteswap
     # each frame individually (tiny allocation: one frame at a time).
     with fits.open(output_path, mode='update') as hdul:
-        # Re-open to get the correct data offset, then mmap the file
         data_offset = hdul[0]._data_offset
 
     fits_dtype = np.dtype(cube_dtype).newbyteorder('>')
@@ -508,6 +557,11 @@ def create_datacube(file_list, image_type, group_key, output_path):
         mm[i] = frame.astype(fits_dtype)
     mm.flush()
     del mm  # release memmap before re-opening
+
+    # Re-open in update mode to add CHECKSUM/DATASUM (mandatory for ESO)
+    with fits.open(output_path, mode='update') as hdul:
+        hdul[0].add_checksum()
+        hdul.flush()
 
     size_mb = os.path.getsize(output_path) / 1024**2
     print(f"    ✓ Saved: {output_path}  shape=({n_frames}, {ny}, {nx})  ({size_mb:.1f} MB)")
