@@ -52,7 +52,7 @@ def is_already_solved(filename):
 
     A frame is considered solved when it has CTYPE1 starting with 'RA'
     together with at least one rotation matrix keyword (PCi_j or CDi_j).
-    This covers both the PCi_j convention (written by ACP/PinPoint and
+    This covers both the PCi_j convention (written by Astra/PinPoint and
     astrometry.net) and the older CDi_j convention.
     """
     try:
@@ -89,7 +89,7 @@ def solve_astrometry(filenameold):
         # File already has .fits extension or other extension
         filename = filenameold
 
-    # Skip solve-field if the frame already has a sky WCS (e.g. from ACP/PinPoint)
+    # Skip solve-field if the frame already has a sky WCS (e.g. from Astra/PinPoint)
     if is_already_solved(filename):
         print("Already solved, skipping astrometry: " + os.path.basename(filename))
         return

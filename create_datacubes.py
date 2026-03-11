@@ -56,7 +56,7 @@ Each output FITS file contains two extensions:
 Header compatibility
 --------------------
 The script supports both:
-  - Raw ACP files     : classified via IMAGETYP keyword
+  - Raw Astra files   : classified via IMAGETYP keyword
                         (Light Frame, Bias Frame, Dark Frame, Flat Frame / FLAT)
   - ESO-processed files: classified via HIERARCH ESO DPR CATG / TYPE keywords
                         (SCIENCE/OBJECT, CALIB/BIAS, CALIB/DARK, CALIB/FLAT)
@@ -98,7 +98,7 @@ warnings.filterwarnings('ignore', category=fits.verify.VerifyWarning)
 def get_image_type(header):
     """
     Determine image type from FITS header.
-    Supports raw ACP headers (IMAGETYP) and ESO-processed headers
+    Supports raw Astra headers (IMAGETYP) and ESO-processed headers
     (HIERARCH ESO DPR TYPE / CATG).
 
     Returns
@@ -330,7 +330,7 @@ def create_datacube(file_list, image_type, group_key, output_path):
             ref_header = header
             ny, nx     = data.shape
             # Preserve native dtype:
-            #   raw ACP  → uint16  (BITPIX=16)
+            #   raw Astra → uint16  (BITPIX=16)
             #   ESO-proc → float32 (BITPIX=-32)
             cube_dtype = data.dtype
 
@@ -398,7 +398,7 @@ def create_datacube(file_list, image_type, group_key, output_path):
     # --- WCS: strip 2D sky WCS and write a clean 3D pixel WCS ---------------
     # The cube header is copied from the first science frame which carries a
     # full sky WCS (RA---TAN / DEC--TAN + PCi_j or CDi_j) written by
-    # ACP/PinPoint.  That 2D sky WCS is meaningless for a 3D pixel cube and
+    # Astra/PinPoint.  That 2D sky WCS is meaningless for a 3D pixel cube and
     # must be completely removed before writing the new 3D pixel WCS.
     #
     # FITS WCS Paper I rules that must be satisfied:
@@ -456,7 +456,7 @@ def create_datacube(file_list, image_type, group_key, output_path):
         del h['BLANK']
 
     # --- DATE-OBS: truncate to restricted ISO 8601 (YYYY-MM-DDThh:mm:ss.sss) -
-    # Raw ACP files have 6 sub-second digits; the standard requires exactly 3.
+    # Raw Astra files have 6 sub-second digits; the standard requires exactly 3.
     if 'DATE-OBS' in h:
         h['DATE-OBS'] = h['DATE-OBS'][:23]
 

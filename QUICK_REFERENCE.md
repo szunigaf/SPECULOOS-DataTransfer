@@ -6,16 +6,14 @@
 # 1. Create conda environment
 conda create -n speculoos_py3 python=3.7
 conda activate speculoos_py3
-pip install astropy python-dotenv numpy
+pip install astropy numpy
 
 # 2. Copy credentials template
 cp .credentials.csh.Io.example .credentials.csh      # or Europa, Ganymede, Callisto
-cp .env.example .env
 
 # 3. Edit with your credentials
 nano .credentials.csh
-nano .env
-chmod 600 .credentials.csh .env
+chmod 600 .credentials.csh
 
 # 4. Update Python script shebangs (server only)
 # Change: #!/opt/anaconda3/envs/speculoos_py3/bin/python
@@ -54,7 +52,7 @@ tail -50 cron_logs/*_transfer_cron.log
 |---------|----------|
 | Credentials not found | Copy `.credentials.csh.example` to `.credentials.csh` |
 | Python import error | `conda activate speculoos_py3; pip install -r requirements.txt` |
-| Permission denied | `chmod 600 .credentials.csh .env` |
+| Permission denied | `chmod 600 .credentials.csh` |
 | solve-field not found | Install astrometry.net or script continues without it |
 | PYTHONHOME error | `unset PYTHONHOME` |
 

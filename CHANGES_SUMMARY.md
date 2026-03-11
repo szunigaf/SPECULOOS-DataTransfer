@@ -217,7 +217,6 @@ The SPECULOOS Data Transfer repository has been completely refactored with three
 ### New Requirements
 ```
 astropy>=5.0
-python-dotenv>=0.19.0
 numpy>=1.20.0
 ```
 
@@ -493,3 +492,84 @@ For questions or issues:
 - Enhanced error handling
 - Local testing capability
 - Comprehensive documentation
+
+---
+
+## Version 4.0 — SPIRIT Pipeline & ESO Archive Compliance
+**Date:** March 6–11, 2026
+
+### New Files
+
+#### `create_datacubes.py`
+New script that stacks individual FITS frames into 3D datacubes `(N_frames, Y, X)` grouped by observation type and metadata.
+
+**Grouping rules:**
+- Science: `OBJECT` + `FILTER` + `EXPTIME`
+- Flat: `FILTER` + `EXPTIME`
+- Dark: `EXPTIME`
+- Bias: all together
+
+**Output filename format** (ESO archive SPECU# convention):
+```
+{SPECU#}.{YYYYMMDD}T{HHMMSS}_{S|C}_{group_key}.fits
+```
+Examples: `SPECU2.20260223T014741_S_TIC46432937b_i_20s.fits`, `SPECU4.20260228T233354_C_flat_zYJ_3.259s.fits`
+
+**Output FITS structure:**
+- `[0] PRIMARY` — 3D pixel array with enriched header (`CUBETYPE`, `CUBEKEY`, `DATE`, `DATE-END`, `WCSAXES`, `CTYPE1/2/3`, `CUNIT1/2/3`, `CRPIX/CRVAL/CDELT` for all 3 axes)
+- `[1] METADATA` — Binary table with one row per frame (`FILENAME`, `DATE-OBS`, `EXPTIME`, `FILTER`, `OBJECT`, `AIRMASS`)
+
+**Header compatibility:** Supports both raw Astra (`IMAGETYP`) and ESO-processed (`HIERARCH ESO DPR CATG/TYPE`) headers.
+
+**Memory management:** Uses streaming `numpy.memmap` write to avoid the ~14 GB double-allocation that `astropy writeto()` would require for large cubes (e.g. 2863 frames × 1280×1024 `int16`). Frames are written one at a time directly into the FITS data region on disk.
+
+#### `transfer_Astra_spirit.csh`
+New transfer script for the SPIRIT (Callisto) telescope. Mirrors `transfer_Astra.csh` but additionally calls `create_datacubes.py` and uses `astrometry_spirit.py`. Key features:
+- Two execution modes: automatic (yesterday's date) and manual (`$1` date list, optional `$2` program ID)
+- Datacube transfer verification via per-filename existence check in `$eso_dir` (not `-newer`, which is unreliable after `mv`)
+- Logs transferred count to `transfer_log.txt` and copies it to Cambridge server via `sshpass`
+- Finds datacubes using `SPECU*_S_*.fits` / `SPECU*_C_*.fits` patterns
+
+---
+
+### Changes to Existing Files
+
+#### `headerfix.py`
+**WCS convention fix — ESO validator compliance:**
+- Science frames: PA computation now prefers `PCi_j + CDELTi` convention (written by Astra/PinPoint) over the older `CDi_j` convention. Previously only `CD1_1` was checked, missing the common Astra output format.
+- Calibration frames (bias/dark/flat): replaced `CDi_j` WCS keywords with `PCi_j + CDELTi` (identity matrix). This eliminates the forbidden mixing of both WCS conventions that the ESO FITS validator flagged.
+- Added explicit removal of any residual `CDi_j` keywords on calibration frames.
+- Added `WCSAXES = 2` keyword to calibration frame headers.
+
+#### `create_datacubes.py`
+**WCS fix (ESO validator compliance):**
+- Completely strips the 2D sky WCS inherited from the first science frame (`CTYPE1=RA---TAN`, `PCi_j`, `CDi_j`, `LONPOLE`, `LATPOLE`, `RADESYS`, `EQUINOX`, etc.) before writing the 3D pixel WCS.
+- Inserts `WCSAXES=3` immediately after `NAXIS3` (required by FITS WCS Paper I to precede all other WCS keywords).
+- Writes a clean 3D pixel WCS: `CTYPE1/2/3=PIXEL`, `CRPIX/CRVAL/CDELT` for all three axes, no `PCi_j` or `CDi_j`.
+
+**Filename format:**
+- Exposure time rounded to 3 decimal places with trailing zeros stripped (e.g. `2.192s` not `2.1918665276329508s`).
+- `SPECULOOS#` → `SPECU#` in filename prefix (ESO 80-char `ORIGFILE` keyword limit).
+
+**Memory / performance:**
+- Replaced `np.stack() + PrimaryHDU(data=cube)` with streaming `numpy.memmap` write: writes a zero-filled stub first, then overwrites data region frame by frame. Peak RAM = one frame (~2.6 MB) instead of two full cubes (~14 GB).
+- Removed `checksum=True` from `writeto()` (same memory issue); CHECKSUM/DATASUM added post-write via `hdul[0].add_checksum()` in `mode='update'` (memory-mapped, low RAM).
+- Chronological sort of frames by `DATE-OBS` now done inside `create_datacube()` in a single pass.
+
+#### `astrometry.py` and `astrometry_spirit.py`
+- Added `is_already_solved()` helper: returns `True` if the frame already has a sky WCS (`CTYPE1` starting with `RA`/`DEC` + `PCi_j` or `CDi_j` keywords). Frames that are already solved are skipped — `solve-field` is not re-run unnecessarily.
+- `astrometry_spirit.py`: added missing `else: filename = filenameold` branch so non-`.fts` files are also checked for pre-existing WCS.
+
+#### `mail_alert.py`
+- Removed `python-dotenv` dependency and `load_dotenv()` call. Credentials are now sourced from `.credentials.csh` by the calling shell script and are already present in `os.environ` — no `.env` file required.
+
+#### `transfer_Astra.csh`
+- Fixed: automatic path was calling `astrometry_spirit.py` instead of `astrometry.py`.
+- Fixed: `sshpass` scp line was commented out in the manual (`foreach`) path — uncommented.
+
+#### `requirements.txt`
+- Removed `python-dotenv>=0.19.0` (no longer needed, see `mail_alert.py` above).
+
+#### `.gitignore`
+- `create_datacubes.py` removed from ignore list (script is now production-ready and committed).
+- Added `test_datacubes/` and `test_datacubes_eso/` to ignore list.

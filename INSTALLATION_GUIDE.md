@@ -21,11 +21,11 @@ git pull origin main
 ```bash
 conda create -n speculoos_py3 python=3.7
 conda activate speculoos_py3
-pip install -r requirements.txt  # or: pip install astropy python-dotenv numpy
+pip install -r requirements.txt  # or: pip install astropy numpy
 
 # Verify
 python --version
-python -c "import astropy, dotenv, numpy; print('Success')"
+python -c "import astropy, numpy; print('Success')"
 ```
 
 ### 3. Update Python Shebangs
@@ -55,14 +55,12 @@ chmod +x *.py *.csh
 ```bash
 # Copy template for your telescope
 cp .credentials.csh.Io.example .credentials.csh        # or Europa, Ganymede, Callisto
-cp .env.example .env
 
 # Edit with actual values
 nano .credentials.csh
-nano .env
 
 # Secure
-chmod 600 .credentials.csh .env
+chmod 600 .credentials.csh
 ```
 
 **Key settings in `.credentials.csh`**:
@@ -100,8 +98,10 @@ Expected: Mount → Copy → Astrometry → Fix headers → Transfer to ESO → 
 cat Logs/transfer_log.txt
 ls Logs/20260222/non_transferred  # Should be empty or non-existent
 
-# Verify ESO output
+# Verify ESO output (individual frames for Io/Europa/Ganymede)
 ls -lh [ESO_DIR]/SPECULOOS*.fits
+# Verify ESO output (datacubes for Callisto/SPIRIT)
+ls -lh [ESO_DIR]/SPECU*_S_*.fits [ESO_DIR]/SPECU*_C_*.fits
 
 # Check headers
 conda activate speculoos_py3
@@ -149,12 +149,13 @@ mkdir -p cron_logs
 
 After installation, verify these files exist:
 
-- [ ] `transfer_Astra.csh` - Main transfer script
+- [ ] `transfer_Astra.csh` - Main transfer script (Io/Europa/Ganymede)
+- [ ] `transfer_Astra_spirit.csh` - Transfer script for Callisto (SPIRIT)
 - [ ] `.credentials.csh` - Telescope-specific credentials (not in git)
-- [ ] `.env` - Email credentials (optional, not in git)
 - [ ] `mail_alert.py` - Email notification script
 - [ ] `astrometry.py` or `astrometry_spirit.py` - Astrometry processing
 - [ ] `headerfix.py` - FITS header standardization
+- [ ] `create_datacubes.py` - Datacube creator (Callisto/SPIRIT only)
 - [ ] `requirements.txt` - Python dependencies list
 
 ---

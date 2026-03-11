@@ -9,12 +9,13 @@
 ```
 ~/ESO_data_transfer/
 ├── <Telescope>_Astra/
-│   ├── transfer_Astra.csh          # Same for all telescopes
-│   ├── astrometry_spirit.py        # Python scripts
+│   ├── transfer_Astra.csh          # Main script (Io/Europa/Ganymede)
+│   ├── transfer_Astra_spirit.csh   # Transfer script (Callisto/SPIRIT only)
+│   ├── astrometry.py               # or astrometry_spirit.py for Callisto
 │   ├── headerfix.py
+│   ├── create_datacubes.py         # Callisto/SPIRIT only
 │   ├── mail_alert.py
 │   ├── .credentials.csh            # Telescope-specific
-│   ├── .env                        # Email credentials
 │   ├── Astra_mount/                # Mount point
 │   ├── workdir/                    # Temporary storage
 │   └── Logs/                       # Log files
@@ -32,19 +33,20 @@ cd ~/ESO_data_transfer/${TELESCOPE}_Astra
 ### 2. Copy Scripts
 ```bash
 cp /path/to/repo/transfer_Astra.csh .
-cp /path/to/repo/astrometry.py .      # or astrometry_spirit.py for Callisto
+cp /path/to/repo/astrometry.py .           # or astrometry_spirit.py for Callisto
 cp /path/to/repo/headerfix.py .
 cp /path/to/repo/mail_alert.py .
+# Callisto/SPIRIT only:
+# cp /path/to/repo/transfer_Astra_spirit.csh .
+# cp /path/to/repo/create_datacubes.py .
 chmod +x *.{csh,py}
 ```
 
 ### 3. Configure Credentials
 ```bash
 cp /path/to/repo/.credentials.csh.${TELESCOPE}.example .credentials.csh
-cp /path/to/repo/.env.example .env
 nano .credentials.csh  # Edit with actual values
-nano .env              # Edit email settings
-chmod 600 .credentials.csh .env
+chmod 600 .credentials.csh
 ```
 
 ### 4. Test
@@ -94,9 +96,10 @@ When you update the generic scripts, you only need to copy them to each telescop
 for TELESCOPE in Io Europa Ganymede Callisto; do
     echo "Updating $TELESCOPE..."
     cp transfer_Astra.csh ~/ESO_data_transfer/${TELESCOPE}_Astra/
-    cp astrometry_spirit.py ~/ESO_data_transfer/${TELESCOPE}_Astra/
+    cp astrometry.py astrometry_spirit.py ~/ESO_data_transfer/${TELESCOPE}_Astra/
     cp headerfix.py ~/ESO_data_transfer/${TELESCOPE}_Astra/
     cp mail_alert.py ~/ESO_data_transfer/${TELESCOPE}_Astra/
+    cp create_datacubes.py ~/ESO_data_transfer/${TELESCOPE}_Astra/
     chmod +x ~/ESO_data_transfer/${TELESCOPE}_Astra/*.{csh,py}
 done
 

@@ -59,7 +59,7 @@ def solve_astrometry(filenameold):
     else:
         filename = filenameold
 
-    # Skip solve-field if the frame already has a sky WCS (e.g. from ACP/PinPoint)
+    # Skip solve-field if the frame already has a sky WCS (e.g. from Astra/PinPoint)
     if is_already_solved(filename):
         print("Already solved, skipping astrometry: " + os.path.basename(filename))
         return

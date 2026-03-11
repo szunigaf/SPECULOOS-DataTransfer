@@ -54,7 +54,7 @@ echo "Start: `date`"
 echo ""
 
 
-echo "Mounting ACP Astronomy directory in $acp_local_path"
+echo "Mounting Astra directory in $acp_local_path"
 mount $acp_local_path
 echo ""
 

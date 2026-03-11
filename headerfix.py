@@ -53,11 +53,11 @@ def apply_correct(filename):
         with fits.open(filename, do_not_scale_image_data=True) as infile:    
         
             #PA computation (not a standard output of the astrometric solving)
-            # Raw frames from ACP/PinPoint carry a PCi_j + CDELTi WCS convention.
+            # Raw frames from Astra/PinPoint carry a PCi_j + CDELTi WCS convention.
             # We compute PA from that matrix and must NOT add CDi_j keywords,
             # which would create a forbidden mix of both WCS conventions.
             if infile[0].header['IMAGETYP'] == 'Light Frame':
-                # Prefer PCi_j convention (written by ACP/PinPoint and astrometry.net)
+                # Prefer PCi_j convention (written by Astra/PinPoint and astrometry.net)
                 if 'PC1_1' in infile[0].header:
                     cdelt1 = float(infile[0].header.get('CDELT1', 1.0))
                     cdelt2 = float(infile[0].header.get('CDELT2', 1.0))
@@ -85,7 +85,7 @@ def apply_correct(filename):
                     infile[0].header['PA'] = (orient, '[deg, 0-360 CCW] Position angle of plate')
 
             # WCS KWDs for bias, dark and flat frames as requested by ESO.
-            # Use PCi_j + CDELTi convention (consistent with science frames from ACP).
+            # Use PCi_j + CDELTi convention (consistent with science frames from Astra).
             # CDi_j is intentionally NOT used to avoid mixing both conventions.
             if infile[0].header['IMAGETYP'] in ('Bias Frame', 'Dark Frame', 'FLAT', 'Flat Frame'):
                 infile[0].header['WCSAXES'] = (2,   'Number of WCS axes')
@@ -111,25 +111,25 @@ def apply_correct(filename):
             #but this is not an issue as the script will be running independently for each telescope.
             #You just have to set correctly the telescope string at the top of the script for each telescope.
         
-            #if infile[0].header['TELESCOP'] == 'ACP->IO' or infile[0].header['TELESCOP'] == 'ACP->Io' or infile[0].header['TELESCOP'] == 'Io':
+            #if infile[0].header['TELESCOP'] == 'Astra->IO' or infile[0].header['TELESCOP'] == 'Astra->Io' or infile[0].header['TELESCOP'] == 'Io':
             if telescope == 'Io':    
                 infile[0].header['TELESCOP'] = 'SPECULOOS-IO'
                 infile[0].header['INSTRUME'] = 'SPECULOOS1'
                 infile[0].header['HIERARCH ESO INS NAME'] = ('SPECULOOS1','Instrument name')
                 infile[0].header['HIERARCH ESO OBS PROG ID'] = (program_id,'ESO program identification')
-            #if infile[0].header['TELESCOP'] == 'ACP->EUROPA' or infile[0].header['TELESCOP'] == 'ACP->Europa' or infile[0].header['TELESCOP'] == 'Europa':
+            #if infile[0].header['TELESCOP'] == 'Astra->EUROPA' or infile[0].header['TELESCOP'] == 'Astra->Europa' or infile[0].header['TELESCOP'] == 'Europa':
             if telescope == 'Europa':
                 infile[0].header['TELESCOP'] = 'SPECULOOS-EUROPA'
                 infile[0].header['INSTRUME'] = 'SPECULOOS2'
                 infile[0].header['HIERARCH ESO INS NAME'] = ('SPECULOOS2','Instrument name')
                 infile[0].header['HIERARCH ESO OBS PROG ID'] = (program_id,'ESO program identification')
-            #if infile[0].header['TELESCOP'] == 'ACP->GANYMEDE' or infile[0].header['TELESCOP'] == 'ACP->Ganymede' or infile[0].header['TELESCOP'] == 'Ganymede':
+            #if infile[0].header['TELESCOP'] == 'Astra->GANYMEDE' or infile[0].header['TELESCOP'] == 'Astra->Ganymede' or infile[0].header['TELESCOP'] == 'Ganymede':
             if telescope == 'Ganymede':
                 infile[0].header['TELESCOP'] = 'SPECULOOS-GANYMEDE' 
                 infile[0].header['INSTRUME'] = 'SPECULOOS3'
                 infile[0].header['HIERARCH ESO INS NAME'] = ('SPECULOOS3','Instrument name')
                 infile[0].header['HIERARCH ESO OBS PROG ID'] = (program_id,'ESO program identification')
-            #if infile[0].header['TELESCOP'] == 'ACP->CALLISTO' or infile[0].header['TELESCOP'] == 'ACP->Callisto'or infile[0].header['TELESCOP'] == 'Callisto':
+            #if infile[0].header['TELESCOP'] == 'Astra->CALLISTO' or infile[0].header['TELESCOP'] == 'Astra->Callisto' or infile[0].header['TELESCOP'] == 'Callisto':
             if telescope == 'Callisto':
                 infile[0].header['TELESCOP'] = 'SPECULOOS-CALLISTO'
                 infile[0].header['INSTRUME'] = 'SPECULOOS4'

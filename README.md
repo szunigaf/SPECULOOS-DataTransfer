@@ -26,7 +26,7 @@ This repository contains scripts to automate the transfer and formatting of astr
 ### Prerequisites
 
 - Python 3.7+ with conda environment
-- Packages: `astropy`, `python-dotenv`, `numpy` (see `requirements.txt`)
+- Packages: `astropy`, `numpy` (see `requirements.txt`)
 
 ### Setup
 
@@ -41,14 +41,12 @@ This repository contains scripts to automate the transfer and formatting of astr
    ```bash
    # Choose your telescope: Io, Europa, Ganymede, or Callisto
    cp .credentials.csh.Io.example .credentials.csh
-   cp .env.example .env
    ```
 
 3. **Edit credentials:**
    ```bash
    nano .credentials.csh
-   nano .env
-   chmod 600 .credentials.csh .env
+   chmod 600 .credentials.csh
    ```
 
 4. **Run transfer:**
@@ -60,18 +58,20 @@ This repository contains scripts to automate the transfer and formatting of astr
 
 ```
 .
-├── transfer_Astra.csh                    # Main transfer script
+├── transfer_Astra.csh                    # Main transfer script (Io, Europa, Ganymede)
+├── transfer_Astra_spirit.csh             # Transfer script for Callisto (SPIRIT)
 ├── astrometry.py                         # Astrometric solving (Io, Europa, Ganymede)
-├── astrometry_spirit.py                  # File renaming (Callisto)
+├── astrometry_spirit.py                  # File renaming + WCS check (Callisto)
 ├── headerfix.py                          # FITS header standardization
+├── create_datacubes.py                   # 3D datacube creator (Callisto/SPIRIT)
 ├── mail_alert.py                         # Email notifications
 ├── requirements.txt                      # Python dependencies
 │
-├── .env.example                          # Email credentials template
-├── .credentials.csh.example              # Shell credentials (Callisto)
+├── .credentials.csh.example              # Shell credentials template
 ├── .credentials.csh.Io.example           # Io-specific template
 ├── .credentials.csh.Europa.example       # Europa-specific template
 ├── .credentials.csh.Ganymede.example     # Ganymede-specific template
+├── .credentials.csh.Callisto.example     # Callisto-specific template
 │
 ├── INSTALLATION_GUIDE.md                 # Server deployment guide
 ├── DEPLOYMENT_GUIDE_TEMPLATE.md          # Multi-telescope setup
@@ -99,13 +99,16 @@ This repository contains scripts to automate the transfer and formatting of astr
                             ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                   Hub Work Directory                        │
-│  [Copy Files] → [Astrometry Solving] → [Fix Headers]       │
+│  [Copy Files] → [Astrometry] → [Fix Headers]               │
+│                                                             │
+│  Io/Europa/Ganymede: → individual SPECULOOS*.fits           │
+│  Callisto (SPIRIT):  → [Create Datacubes] → SPECU*_S/C_*.fits│
 └───────────────────────────┬─────────────────────────────────┘
                             │ Transfer
                             ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                    ESO Archive Directory                    │
-│              (Final SPECULOOS*.fits files)                   │
+│              (Final FITS files, ESO-compliant)              │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -207,4 +210,4 @@ Check documentation in this repository and log files. Contact SPECULOOS data man
 ---
 
 **Authors**: Original by Laetitia Delrez (2018), revised by Seba Zúñiga-Fernández (2026)  
-**Last Updated**: February 2026
+**Last Updated**: March 2026
