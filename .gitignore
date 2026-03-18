@@ -1,13 +1,14 @@
 # Credentials and sensitive information
 .env
 .credentials.csh
+.credentials.csh.Callisto.example
+.credentials.csh.Europa.example
+.credentials.csh.Io.example
+.credentials.csh.Ganymede.example
 PYTHON3_MIGRATION.md
 DEPLOYMENT_GUIDE.README.md
 CREDENTIALS_SETUP.md
 .credentials.csh.local_test
-
-# Scripts not ready for repository
-#create_datacubes.py
 
 # Python
 __pycache__/
