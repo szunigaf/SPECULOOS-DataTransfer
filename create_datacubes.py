@@ -674,6 +674,9 @@ def create_all_datacubes(groups, output_dir):
     science_groups = {k: v for k, v in groups.items() if v['type'] == 'science'}
     calib_groups   = {k: v for k, v in groups.items() if v['type'] != 'science'}
 
+    expected = len(science_groups) + len(calib_groups)
+    print(f"=== Expected: {expected} datacubes ({len(science_groups)} science, {len(calib_groups)} calibration) ===")
+
     success, failed = 0, 0
 
     print("Science datacubes:")
@@ -686,7 +689,10 @@ def create_all_datacubes(groups, output_dir):
             fname = build_output_name(val['type'], key, instrume, first_date)
             final_path = os.path.join(output_dir, fname)
             os.replace(tmp_path, final_path)
-            print(f"    → Renamed to: {fname}")
+            print(f"    \u2192 Renamed to: {fname}")
+        else:
+            fname = build_output_name(val['type'], key)
+            print(f"=== FAILED: {fname} ===")
         success += ok
         failed  += not ok
 
@@ -699,7 +705,10 @@ def create_all_datacubes(groups, output_dir):
             fname = build_output_name(val['type'], key, instrume, first_date)
             final_path = os.path.join(output_dir, fname)
             os.replace(tmp_path, final_path)
-            print(f"    → Renamed to: {fname}")
+            print(f"    \u2192 Renamed to: {fname}")
+        else:
+            fname = build_output_name(val['type'], key)
+            print(f"=== FAILED: {fname} ===")
         success += ok
         failed  += not ok
 

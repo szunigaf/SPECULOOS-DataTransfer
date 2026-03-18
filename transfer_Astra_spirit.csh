@@ -129,7 +129,16 @@ if ("$1" == "") then
 	    echo ""
 
 	echo "Running create_datacubes.py..."
-	    python3 ${PYTHON_SCRIPTS_PATH}/create_datacubes.py $data_dir/$date $data_dir/$date
+	    set cubes_log=$data_dir/$date/datacubes.log
+	    python3 ${PYTHON_SCRIPTS_PATH}/create_datacubes.py $data_dir/$date $data_dir/$date |& tee $cubes_log
+	    set cubes_expected_count=`grep '=== Expected:' $cubes_log | sed 's/.*Expected: \([0-9]*\) datacubes.*/\1/'`
+	    set cubes_done_count=`grep '=== Done:' $cubes_log | sed 's/.*Done: \([0-9]*\) datacubes.*/\1/'`
+	    set cubes_failed_count=`grep '=== Done:' $cubes_log | sed 's/.*, \([0-9]*\) failed.*/\1/'`
+	    echo " create_datacubes.py: expected $cubes_expected_count, created $cubes_done_count, failed $cubes_failed_count"
+	    if ($cubes_failed_count != 0) then
+	        echo " Warning: $cubes_failed_count group(s) failed during datacube creation"
+	        python3 ${PYTHON_SCRIPTS_PATH}/mail_alert.py $telescope_name $cubes_failed_count
+	    endif
 	    echo ""
 
         if  (! -e $log_dir/$date) then
@@ -163,6 +172,10 @@ if ("$1" == "") then
 		    echo $cube >> $filelist4
 		endif
 	    end
+	    echo ""
+
+	    # Append any cubes that failed inside create_datacubes.py to non_transferred
+	    grep '=== FAILED:' $cubes_log | sed 's/=== FAILED: \(.*\) ===/\1/' >> $filelist4
 	    echo ""
 
 	    echo " Checking for datacubes that failed to transfer "
@@ -266,7 +279,16 @@ else
 	    echo ""
 
 	    echo "Running create_datacubes.py..."
-	    python3 ${PYTHON_SCRIPTS_PATH}/create_datacubes.py $data_dir/$date $data_dir/$date
+	    set cubes_log=$data_dir/$date/datacubes.log
+	    python3 ${PYTHON_SCRIPTS_PATH}/create_datacubes.py $data_dir/$date $data_dir/$date |& tee $cubes_log
+	    set cubes_expected_count=`grep '=== Expected:' $cubes_log | sed 's/.*Expected: \([0-9]*\) datacubes.*/\1/'`
+	    set cubes_done_count=`grep '=== Done:' $cubes_log | sed 's/.*Done: \([0-9]*\) datacubes.*/\1/'`
+	    set cubes_failed_count=`grep '=== Done:' $cubes_log | sed 's/.*, \([0-9]*\) failed.*/\1/'`
+	    echo " create_datacubes.py: expected $cubes_expected_count, created $cubes_done_count, failed $cubes_failed_count"
+	    if ($cubes_failed_count != 0) then
+	        echo " Warning: $cubes_failed_count group(s) failed during datacube creation"
+	        python3 ${PYTHON_SCRIPTS_PATH}/mail_alert.py $telescope_name $cubes_failed_count
+	    endif
 	    echo ""
 
         if  (! -e $log_dir/$date) then
@@ -300,6 +322,10 @@ else
 		    echo $cube >> $filelist4
 		endif
 	    end
+	    echo ""
+
+	    # Append any cubes that failed inside create_datacubes.py to non_transferred
+	    grep '=== FAILED:' $cubes_log | sed 's/=== FAILED: \(.*\) ===/\1/' >> $filelist4
 	    echo ""
 
 	    echo " Checking for datacubes that failed to transfer "
