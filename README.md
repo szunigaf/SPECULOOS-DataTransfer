@@ -97,13 +97,13 @@ This repository contains scripts to automate the transfer and formatting of astr
 └───────────────────────────┬─────────────────────────────────┘
                             │ Mount & Copy
                             ▼
-┌─────────────────────────────────────────────────────────────┐
-│                   Hub Work Directory                        │
-│  [Copy Files] → [Astrometry] → [Fix Headers]               │
-│                                                             │
-│  Io/Europa/Ganymede: → individual SPECULOOS*.fits           │
+┌─────────────────────────────────────────────────────────────-┐
+│                   Hub Work Directory                         │
+│  [Copy Files] → [Astrometry] → [Fix Headers]                 │
+│                                                              │
+│  Io/Europa/Ganymede: → individual SPECULOOS*.fits            │
 │  Callisto (SPIRIT):  → [Create Datacubes] → SPECU*_S/C_*.fits│
-└───────────────────────────┬─────────────────────────────────┘
+└───────────────────────────┬─────────────────────────────────-┘
                             │ Transfer
                             ▼
 ┌─────────────────────────────────────────────────────────────┐
