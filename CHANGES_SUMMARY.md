@@ -482,16 +482,75 @@ For questions or issues:
 
 ---
 
-**Date:** February 25, 2026  
-**Version:** 3.0 (Python 3 Migration + Credential Management)  
-**Status:** Ready for deployment  
-**Major Changes:**
-- Python 3.7+ migration complete
-- Conda environment integration
-- Automatic astrometry.net detection
-- Enhanced error handling
-- Local testing capability
-- Comprehensive documentation
+## Version 4.1 — OOM Fix & True Streaming I/O
+**Date:** March 17, 2026
+
+### Problem: OOM Kill on Server
+
+`create_datacubes.py` was being killed by the Linux OOM killer during large science datacube builds:
+
+```
+[78877129.887493] Killed process 15465 (python3) total-vm:23533876kB, anon-rss:15404164kB
+[79212714.217039] Killed process 2335  (python3) total-vm:23522020kB, anon-rss:15396436kB
+```
+
+**Root cause — two simultaneous full-cube allocations:**
+
+1. `frames_list` — all frames kept as a Python list of numpy arrays (~7.3 GB for 1137 frames × 1280×1024 `int16`)
+2. `stub = np.zeros((n_frames, ny, nx), dtype=cube_dtype)` — allocated while `frames_list` was still alive (~7.3 GB)
+3. Combined peak: **~14.6 GB → OOM kill at 15.4 GB RSS**
+
+Despite the comment saying "streaming write", the code was not streaming at all.
+
+### Fix: True Two-Pass Approach
+
+**New `_dtype_from_header()` helper** (added before `create_datacube`):
+- Infers the numpy dtype that astropy would return for `hdul[0].data` from `BITPIX` + `BZERO` header keywords alone — no pixel data loaded.
+- Handles: `BITPIX=16+BZERO=32768 → uint16`, `BITPIX=16 → int16`, `BITPIX=32 → int32`, `BITPIX=-32 → float32`, `BITPIX=-64 → float64`, `BITPIX=8 → uint8`.
+
+**Pass 1 (headers only — zero pixel I/O):**
+- Opens each file with `memmap=True, do_not_scale_image_data=True` — astropy reads only the header block (~2880 bytes/file, negligible vs. frame data).
+- Shape derived from `NAXIS1`/`NAXIS2` keywords; dtype from `_dtype_from_header()`.
+- Collects all per-frame metadata (`DATE-OBS`, `EXPTIME`, `FILTER`, `OBJECT`, `AIRMASS`) and sorts chronologically — no pixel data ever in RAM.
+
+**Stub write (chunked — no large allocation):**
+- Replaces `np.zeros((n_frames, ny, nx))` + `writeto()`.
+- Uses `h.tostring()` to write the FITS header block directly, then streams zero-fill to disk in 50-frame chunks (~130 MB per chunk for 1280×1024 `int16`), then pads to 2880-byte FITS block boundary.
+- Peak RAM during stub write: **~130 MB** (one chunk buffer).
+
+**Pass 2 (pixels, one frame at a time):**
+- Re-reads each source file in chronological order, copies one frame into the `numpy.memmap` data region, then `del frame` immediately.
+- Peak RAM: **~1 frame (~2.6 MB)**.
+
+**Comparison:**
+
+| Metric | Before | After |
+|--------|--------|-------|
+| Peak RAM | ~14.6 GB (OOM) | ~2.6 MB |
+| Pixel I/O | 1× read (all in RAM) | 1× read (Pass 2 only) |
+| Pass 1 I/O | full pixel read | header blocks only (~2880 B/file) |
+
+### Fix: FITS NAXISi Card Ordering (`VerifyError`)
+
+A `VerifyError` was raised when appending the `METADATA` BinTable HDU:
+
+```
+astropy.io.fits.verify.VerifyError:
+HDU 0:
+    'NAXIS1' card at the wrong place (card 87).
+    'NAXIS2' card at the wrong place (card 88).
+    'NAXIS3' card at the wrong place (card 89).
+    'EXTEND' card at the wrong place (card 90).
+```
+
+**Root cause:** `fits.PrimaryHDU(data=None)` creates a `NAXIS=0` header with no `NAXISi` cards. When `h['NAXIS1'] = nx` etc. are assigned afterwards, astropy appends new cards at the end of the ~87-keyword ref_header block. FITS mandates `NAXISi` immediately after `NAXIS`.
+
+**Fix — re-anchor NAXISi cards:**
+- After setting `h['NAXIS']`, `h['NAXIS1']`, `h['NAXIS2']`, `h['NAXIS3']`: find the index of `NAXIS`, delete each `NAXISi`, and re-insert in order at `NAXIS_pos + offset` using `h.insert(idx, fits.Card(...))`.
+- Result: mandatory FITS card order `[SIMPLE, BITPIX, NAXIS, NAXIS1, NAXIS2, NAXIS3, EXTEND, ...]` is always satisfied.
+
+**Fix — safe BinTable append:**
+- Replaced the `with fits.open(..., mode='append') as hdul` context manager (which uses `output_verify='exception'` on `__exit__`) with an explicit `hdul.close(output_verify='silentfix')`. This auto-corrects any borderline cards from older Astra headers instead of raising on them.
 
 ---
 
@@ -573,3 +632,16 @@ New transfer script for the SPIRIT (Callisto) telescope. Mirrors `transfer_Astra
 #### `.gitignore`
 - `create_datacubes.py` removed from ignore list (script is now production-ready and committed).
 - Added `test_datacubes/` and `test_datacubes_eso/` to ignore list.
+
+---
+
+## Version 3.0 — Python 3 Migration & Credential Management
+**Date:** February 25, 2026  
+**Status:** Ready for deployment  
+**Major Changes:**
+- Python 3.7+ migration complete
+- Conda environment integration
+- Automatic astrometry.net detection
+- Enhanced error handling
+- Local testing capability
+- Comprehensive documentation

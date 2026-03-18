@@ -257,6 +257,35 @@ def scan_directory(input_dir):
     return groups
 
 
+def _dtype_from_header(header):
+    """
+    Infer the numpy dtype that astropy would return for hdul[0].data
+    (i.e. after applying BZERO/BSCALE scaling) from header keywords alone,
+    so we can classify files in Pass 1 without reading any pixel data.
+
+    Rules mirror astropy's ImageHDU scaling logic:
+      BITPIX=16 + BZERO=32768  →  uint16   (standard unsigned int16 trick)
+      BITPIX=16 (otherwise)    →  int16
+      BITPIX=32                →  int32
+      BITPIX=-32               →  float32
+      BITPIX=-64               →  float64
+      BITPIX=8                 →  uint8
+    """
+    bitpix = int(header.get('BITPIX', 16))
+    bzero  = float(header.get('BZERO',  0))
+    if   bitpix ==  16:
+        return np.dtype('uint16') if bzero == 32768.0 else np.dtype('int16')
+    elif bitpix ==  32:
+        return np.dtype('int32')
+    elif bitpix == -32:
+        return np.dtype('float32')
+    elif bitpix == -64:
+        return np.dtype('float64')
+    elif bitpix ==   8:
+        return np.dtype('uint8')
+    return np.dtype('float32')   # safe fallback
+
+
 def create_datacube(file_list, image_type, group_key, output_path):
     """
     Stack FITS files into a 3D datacube [frame, y, x] and save to disk.
@@ -284,63 +313,60 @@ def create_datacube(file_list, image_type, group_key, output_path):
     print(f"  {group_key}  ({n} frames)...")
 
     # ------------------------------------------------------------------
-    # Single-pass approach — one fits.open() per file, no pre-allocation:
+    # Two-pass approach — minimal RAM *and* minimal I/O:
     #
-    #   • memmap=False is mandatory: raw FITS files carry BZERO/BSCALE/BLANK
-    #     which astropy cannot apply lazily over a memory-map.  On a local
-    #     disk this raises an immediate exception; on NFS-mounted storage it
-    #     can block indefinitely (observed hang of several hours).
+    # Pass 1 (headers only):
+    #   Open each file with lazy=True (no pixel data loaded at all).
+    #   Shape is read from NAXIS1/NAXIS2; dtype is inferred from BITPIX+BZERO
+    #   via _dtype_from_header().  Total I/O for Pass 1 ≈ header blocks only
+    #   (~2880 bytes per file, negligible vs. frame data).
     #
-    #   • Frames are appended to a plain Python list and stacked with
-    #     np.stack() at the end.  This avoids pre-allocating the full
-    #     (N, Y, X) array up-front — at ~8 MB/frame × 300+ frames that
-    #     would require >2 GB of contiguous RAM before a single frame is
-    #     read, potentially triggering swap on the server.
+    # Pass 2 (pixels, one frame at a time):
+    #   Re-open each valid file in chronological order, copy directly into
+    #   the memory-mapped data region, then release.  Peak RAM = 1 frame.
     #
-    #   • DATE-OBS is collected in the same loop, so no second round of
-    #     file-opens is needed.  Chronological sorting is done once in
-    #     memory after all frames are collected.
-    #
-    #   • The reference header comes from the first successfully read frame,
-    #     also inside this loop — no separate preliminary open required.
+    # Compared with the old single-pass approach (all frames in RAM, then
+    # an extra np.zeros stub ≈ 2× full-cube allocation, ~14 GB OOM):
+    #   • RAM:  ~14 GB  →  ~1 frame (~2.6 MB)
+    #   • I/O:  1× read →  1× read  (Pass 1 reads headers only, no pixel I/O)
     # ------------------------------------------------------------------
 
-    frames_list = []          # list of 2-D ndarray, one per valid frame
+    # --- Pass 1: headers only — no pixel data loaded -------------------------
     filenames, dates, exptimes, filters_, objects_, airmasses = [], [], [], [], [], []
-    ref_header  = None        # header of the first valid frame
-    ny = nx = None            # reference shape, determined on first valid frame
-    cube_dtype  = None        # native dtype,   determined on first valid frame
+    valid_files = []          # filepaths that passed shape check
+    ref_header  = None
+    ny = nx = None
+    cube_dtype  = None
     skipped_shape = 0
 
     for fpath in file_list:
         try:
-            with fits.open(fpath, memmap=False) as hdul:
-                data   = hdul[0].data
+            with fits.open(fpath, memmap=True, do_not_scale_image_data=True) as hdul:
                 header = hdul[0].header.copy()
+                # Shape from header keywords — zero pixel I/O
+                naxis = header.get('NAXIS', 0)
+                if naxis < 2:
+                    print(f"    Warning: NAXIS<2 in {os.path.basename(fpath)}, skipping")
+                    continue
+                fny = int(header['NAXIS2'])
+                fnx = int(header['NAXIS1'])
+                fdtype = _dtype_from_header(header)
         except Exception as e:
-            print(f"    Error reading {os.path.basename(fpath)}: {e}")
+            print(f"    Error reading header of {os.path.basename(fpath)}: {e}")
             continue
 
-        if data is None:
-            print(f"    Warning: no data in {os.path.basename(fpath)}, skipping")
-            continue
-
-        # Establish reference dimensions from the first valid frame
         if ref_header is None:
             ref_header = header
-            ny, nx     = data.shape
-            # Preserve native dtype:
-            #   raw Astra → uint16  (BITPIX=16)
-            #   ESO-proc → float32 (BITPIX=-32)
-            cube_dtype = data.dtype
+            ny, nx     = fny, fnx
+            cube_dtype = fdtype
 
-        if data.shape != (ny, nx):
-            print(f"    Warning: shape mismatch {data.shape} vs {(ny, nx)} "
+        if (fny, fnx) != (ny, nx):
+            print(f"    Warning: shape mismatch ({fny},{fnx}) vs ({ny},{nx}) "
                   f"in {os.path.basename(fpath)}, skipping")
             skipped_shape += 1
             continue
 
-        frames_list.append(data.astype(cube_dtype))
+        valid_files.append(fpath)
         filenames.append(os.path.basename(fpath))
         dates.append(str(header.get('DATE-OBS', '')))
         exptimes.append(float(header.get('EXPTIME', 0)))
@@ -351,14 +377,13 @@ def create_datacube(file_list, image_type, group_key, output_path):
     if skipped_shape > 0:
         print(f"    Warning: {skipped_shape} frame(s) skipped due to shape mismatch "
               f"(expected {ny}x{nx})")
-    if not frames_list:
+    if not valid_files:
         print(f"  Error: no valid frames for {group_key}")
         return False, '', ''
 
-    # Sort all collected data chronologically by DATE-OBS — purely in memory,
-    # no additional file I/O.
+    # Sort chronologically by DATE-OBS (no pixel data in RAM at all)
     order       = sorted(range(len(dates)), key=lambda i: dates[i])
-    frames_list = [frames_list[i] for i in order]
+    valid_files = [valid_files[i] for i in order]
     filenames   = [filenames[i]   for i in order]
     dates       = [dates[i]       for i in order]
     exptimes    = [exptimes[i]    for i in order]
@@ -366,21 +391,7 @@ def create_datacube(file_list, image_type, group_key, output_path):
     objects_    = [objects_[i]    for i in order]
     airmasses   = [airmasses[i]   for i in order]
 
-    # ----------------------------------------------------------------
-    # Streaming write: avoid building the full cube in RAM.
-    #
-    # np.stack() + PrimaryHDU(data=cube) requires TWO full-cube
-    # allocations — one for the native-dtype cube and one for the
-    # big-endian byteswap that astropy performs during writeto().
-    # For ~2800 frames × 1280×1024 int16 that is 2 × 7 GB = 14 GB.
-    #
-    # Instead we:
-    #   1. Write a header-only stub (data=None) to create the file.
-    #   2. Memory-map the data region and fill it one frame at a time.
-    # Peak RAM is one frame (~2.6 MB) rather than the full cube.
-    # ----------------------------------------------------------------
-    valid = len(frames_list)
-    n_frames = valid
+    n_frames = len(valid_files)
 
     # Build and patch the header before opening the file
     primary_hdu = fits.PrimaryHDU(data=None, header=ref_header)
@@ -394,6 +405,20 @@ def create_datacube(file_list, image_type, group_key, output_path):
     h['NAXIS1'] = nx
     h['NAXIS2'] = ny
     h['NAXIS3'] = n_frames
+
+    # --- Re-anchor NAXISi to the mandatory FITS positions --------------------
+    # fits.PrimaryHDU(data=None) creates a NAXIS=0 header (no NAXISi cards).
+    # Assigning h['NAXIS1']/h['NAXIS2']/h['NAXIS3'] therefore APPENDS them at
+    # the end of the ~87-keyword ref_header block instead of placing them
+    # immediately after NAXIS, causing a VerifyError on the later append step.
+    # Fix: delete each one and re-insert in order right after NAXIS.
+    _naxis_pos = h.index('NAXIS')
+    for _offset, (_kw, _val) in enumerate(
+            [('NAXIS1', nx), ('NAXIS2', ny), ('NAXIS3', n_frames)], start=1):
+        _comment = h.comments[_kw] if _kw in h else ''
+        if _kw in h:
+            del h[_kw]
+        h.insert(_naxis_pos + _offset, fits.Card(_kw, _val, _comment))
 
     # --- WCS: strip 2D sky WCS and write a clean 3D pixel WCS ---------------
     # The cube header is copied from the first science frame which carries a
@@ -535,26 +560,56 @@ def create_datacube(file_list, image_type, group_key, output_path):
 
     os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
 
-    # Write a correctly-shaped stub filled with zeros so that astropy writes
-    # the right NAXIS/NAXIS1/2/3 values into the file header.
-    # (PrimaryHDU(data=None) forces NAXIS=0, stripping NAXISi keywords.)
-    stub = np.zeros((n_frames, ny, nx), dtype=cube_dtype)
-    stub_hdu = fits.PrimaryHDU(data=stub, header=h)
-    fits.HDUList([stub_hdu, table_hdu]).writeto(
-        output_path, overwrite=True, output_verify='silentfix')
-    del stub  # free RAM immediately — data region will be overwritten below
+    # --- Write PRIMARY header + zero-filled data block without allocating   ---
+    # --- the full cube in RAM.                                               ---
+    #
+    # Header.tostring() returns a properly FITS-formatted, 2880-byte-padded
+    # header string.  We write that, then stream zeros to disk in 50-frame
+    # chunks to fill the data block, then pad to the FITS block boundary.
+    # The BinTable HDU is appended afterwards via astropy (tiny allocation).
+    fits_dtype   = np.dtype(cube_dtype).newbyteorder('>')
+    frame_nbytes = ny * nx * fits_dtype.itemsize
+    total_data_bytes = n_frames * frame_nbytes
+    data_padding = (2880 - total_data_bytes % 2880) % 2880
 
-    # Memory-map the pixel data region and fill frame by frame.
-    # numpy uses native byte order; FITS requires big-endian, so byteswap
-    # each frame individually (tiny allocation: one frame at a time).
+    header_bytes = h.tostring(sep='', endcard=True, padding=True).encode('ascii')
+
+    with open(output_path, 'wb') as f:
+        f.write(header_bytes)
+        # Write zero data in 50-frame chunks (≈130 MB per chunk for 1280×1024 int16)
+        chunk_nbytes = 50 * frame_nbytes
+        zeros        = bytearray(chunk_nbytes)
+        written = 0
+        while written < total_data_bytes:
+            to_write = min(chunk_nbytes, total_data_bytes - written)
+            f.write(zeros[:to_write])
+            written += to_write
+        if data_padding:
+            f.write(b'\x00' * data_padding)
+
+    # Append the BinTable HDU (small allocation — metadata only).
+    # Use explicit close with output_verify='silentfix' instead of the default
+    # 'exception' mode used by the context manager __exit__.
+    hdul = fits.open(output_path, mode='append')
+    hdul.append(table_hdu)
+    hdul.close(output_verify='silentfix')
+
+    # --- Pass 2: fill the data block one frame at a time via memmap ----------
+    # Re-read each source file in sorted order and copy directly into the
+    # memory-mapped data region.  Peak RAM = one frame at a time.
     with fits.open(output_path, mode='update') as hdul:
         data_offset = hdul[0]._data_offset
 
-    fits_dtype = np.dtype(cube_dtype).newbyteorder('>')
     mm = np.memmap(output_path, dtype=fits_dtype, mode='r+',
                    offset=data_offset, shape=(n_frames, ny, nx))
-    for i, frame in enumerate(frames_list):
-        mm[i] = frame.astype(fits_dtype)
+    for i, fpath in enumerate(valid_files):
+        try:
+            with fits.open(fpath, memmap=False) as hdul:
+                frame = hdul[0].data
+            mm[i] = frame.astype(fits_dtype)
+            del frame
+        except Exception as e:
+            print(f"    Error re-reading {os.path.basename(fpath)}: {e}")
     mm.flush()
     del mm  # release memmap before re-opening
 
