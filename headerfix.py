@@ -341,7 +341,7 @@ def apply_correct(filename):
             path = os.path.dirname(os.path.abspath(filename))
             instrument = infile[0].header['INSTRUME']
             part1 = path + '/' + instrument + '.' + str(year) + '-' + str(month).zfill(2) + '-' + str(day).zfill(2)
-            part2 = str(hour).zfill(2) + '_' + str(minute).zfill(2) + '_' + str(second).zfill(2) + '.' + str(int(microsecond)/int(1E3)).zfill(3) + '.fits'
+            part2 = str(hour).zfill(2) + '_' + str(minute).zfill(2) + '_' + str(second).zfill(2) + '.' + str(int(microsecond)//int(1E3)).zfill(3) + '.fits'
             outfile = part1 + 'T' + part2
             if os.path.exists(outfile):
                 os.remove(outfile)
