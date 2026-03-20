@@ -482,7 +482,102 @@ For questions or issues:
 
 ---
 
-## Version 4.1 — OOM Fix & True Streaming I/O
+## Version 4.3 — Transfer Verification Improvements & Chilean Time Script
+**Date:** March 18–20, 2026
+
+### New File
+
+#### `transfer_Astra_chilean.csh`
+New dedicated transfer script for Chilean time observations (non-core programme nights). Key differences from `transfer_Astra.csh`:
+- **Both `$1` (date list) and `$2` (program ID) are mandatory** — the script exits immediately with a usage message if either is missing. There is no automatic "yesterday" fallback, since Chilean time always requires an explicit date and a specific ESO programme ID.
+- **Separate log file** `transfer_log_chilean.txt` — avoids overwriting the core programme's `transfer_log.txt` on the Cambridge server. Each log entry also records the program ID for traceability.
+- Header banner identifies the run as a Chilean time transfer and prints the program ID.
+
+Usage:
+```csh
+tcsh transfer_Astra_chilean.csh "20260317" "60.A-9099(A)"
+# or multiple nights:
+tcsh transfer_Astra_chilean.csh "20260317 20260318" "60.A-9099(A)"
+```
+
+---
+
+### Transfer Verification Logic Overhaul
+
+#### `transfer_Astra.csh` and `transfer_Astra_chilean.csh`
+
+**Problem:** The `non_transferred` check only counted files physically remaining in `$data_dir` after `mv`. This missed failures occurring earlier in the pipeline (e.g. `astrometry.py` or `headerfix.py` crash causing files to never be renamed to `SPECULOOS*`), and the `transferred` list was built *before* `mv`, so it only reflected pre-move state.
+
+**Fix — post-move verification against `$eso_dir`:**
+- `mv` now happens first.
+- `transferred` list is built by querying `$eso_dir` with `-newer $listsci` (files that arrived during this run), giving ground-truth counts of what actually landed in the ESO directory.
+- `num_bad_files` computed as `countsci - count` (original files copied from Astra minus files confirmed in `$eso_dir`), catching failures at any pipeline stage:
+
+| Failure point | Old behaviour | New behaviour |
+|---|---|---|
+| `astrometry.py` / `headerfix.py` crash | not caught if file stayed with original name | `countsci - count` mismatch → caught ✅ |
+| `mv` failure | file still in `$data_dir` → caught | `countsci - count` mismatch → caught ✅ |
+| All above combined | partially correct | always correct ✅ |
+
+- `non_transferred` file list still written (for manual inspection of stragglers still in staging area).
+- Alert message now includes counts: `"N files not transferred properly (N out of M)"`.
+
+#### `transfer_Astra_spirit.csh` — Datacube Creation Verification
+
+**Problem:** The existing `foreach` name-check in `$eso_dir` correctly verified cubes after `mv`, but could not detect cubes that `create_datacubes.py` silently failed to write (group error during cube creation means the file never exists on disk, so it never appears in the `cubes_created` list or `non_transferred`).
+
+**Fix — three-layer verification:**
+
+1. **Expected count from `scan_directory`** — `create_datacubes.py` now prints:
+   ```
+   === Expected: N datacubes (M science, K calibration) ===
+   ```
+   This comes directly from the group classification step (zero extra I/O).
+
+2. **Failed cube names** — when `create_datacube()` returns `False` for a group, `create_all_datacubes()` now prints:
+   ```
+   === FAILED: C_flat_i_5s.fits ===
+   ```
+   using the fallback filename (group key + type code) to identify the missing cube.
+
+3. **Shell-side cross-check** — `create_datacubes.py` output is tee'd to `datacubes.log`. The script then:
+   - Parses `cubes_expected_count`, `cubes_done_count`, and `cubes_failed_count` from the log.
+   - Fires a mail alert immediately if `cubes_failed_count > 0`.
+   - After the `foreach` mv-check, appends any `=== FAILED: ===` names from `datacubes.log` into `non_transferred`, so that internally-failed cubes appear in the same list as mv-failed cubes.
+
+**Coverage after fix:**
+
+| Failure | Detected by | Appears in `non_transferred`? |
+|---|---|---|
+| `create_datacubes.py` group error (never written) | `cubes_failed_count` + `FAILED:` log line | ✅ |
+| `mv` failure (cube on disk, not in `$eso_dir`) | `foreach` name-check | ✅ |
+| `astrometry` / `headerfix` crash (0 cubes created) | `cubes_failed_count` alert | ✅ alert fires |
+
+---
+
+### Bug Fix: Python 3 Integer Division in `headerfix.py`
+
+**Problem:** Output filenames had malformed millisecond fields:
+- Expected: `SPECULOOS2.2026-03-18T08_29_48.000.fits`
+- Actual: `SPECULOOS2.2026-03-18T08_29_48.0.0.fits`
+
+**Root cause:** The filename construction used `/` (true division) instead of `//` (integer division):
+```python
+# Before (Python 2 behaviour — integer division):
+str(int(microsecond)/int(1E3)).zfill(3)
+# In Python 3, / always returns float → str(0.0) = "0.0" → zfill(3) has no effect
+```
+
+**Fix:** Changed `/` to `//`:
+```python
+# After:
+str(int(microsecond)//int(1E3)).zfill(3)
+```
+This restores the correct zero-padded 3-digit millisecond field (e.g. `000`, `500`) in all output filenames.
+
+---
+
+## Version 4.2 — OOM Fix & True Streaming I/O
 **Date:** March 17, 2026
 
 ### Problem: OOM Kill on Server
