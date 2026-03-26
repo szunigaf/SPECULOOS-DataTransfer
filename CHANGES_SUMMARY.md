@@ -418,6 +418,64 @@ EMAIL_CC                 # CC recipients (optional)
 - ESO archive integration unchanged
 - FITS file naming conventions unchanged
 - Command-line arguments unchanged
+
+---
+
+## Update — March 26, 2026: Datacube METADATA Enhancements
+
+### File Modified
+
+#### **`create_datacubes.py`**
+**Changes:**
+
+- **Extended METADATA BinTable with per-frame varying keywords**
+  - During Pass 1 (headers-only read), all individual frame headers are now retained in memory (`all_headers_list`)
+  - After stacking, any keyword with a standard ≤8-character name whose value **differs across frames** is automatically added as an extra column to the METADATA BinTable
+  - Keywords already covered by dedicated columns and structural FITS keywords (`BITPIX`, `NAXIS*`, `SIMPLE`, `COMMENT`, `HISTORY`) are excluded from the auto-scan
+  - HIERARCH ESO keywords are excluded (names exceed the 8-char BinTable column-name limit)
+  - Numeric-valued keywords are stored as `float64`; string-valued keywords as strings
+  - A summary line is printed at cube creation time listing all extra columns added
+
+- **Added three always-present time columns: `JD-OBS`, `MJD-OBS`, `HJD-OBS`**
+  - These three Julian Date flavours are guaranteed present in every METADATA table, even if their value is constant across all frames (in which case the auto-varying scan would otherwise silently drop them)
+  - Missing values (keyword absent from a frame header) are stored as `NaN`
+  - All three are excluded from the auto-varying scan to avoid duplication
+
+**Impact:** No individual frame header information is lost. The METADATA BinTable now captures the full per-frame time series for `JD-OBS`, `MJD-OBS`, `HJD-OBS` plus all other keywords that change between exposures (e.g. `CCD-TEMP`, `ALTITUDE`, `AZIMUTH`, `FOCUSPOS`, `HUMIDITY`, `SKYTEMP`, `AMBTEMP`, `LST`, `RA`, `DEC`). Keywords identical across all frames remain in the PRIMARY header only (no duplication).
+
+**Memory / I/O impact:**
+- **I/O:** zero extra — headers were already read in Pass 1 (~2880 bytes per file, no pixel data)
+- **RAM:** ~5–15 KB × N_frames for retained headers (e.g. ~15 MB for 1000 frames, negligible vs. pixel cube)
+- **Output file size:** BinTable grows by N_varying_columns × N_frames × 8 bytes (typically a few hundred KB)
+
+### Updated Docstring
+- `[1] METADATA` section in the module docstring updated to list `JD-OBS`, `MJD-OBS`, `HJD-OBS` as always-present columns and describe the auto-varying-keyword mechanism
+
+### How to inspect METADATA from the command line
+
+```bash
+# Check column names present in the METADATA extension
+dfits -x 1 SPECU4.20260305T000023_S_Sp0805+0417_zYJ_6s.fits | grep TTYPE
+
+# Print per-frame JD-OBS, MJD-OBS, HJD-OBS values (requires CFITSIO ftlist)
+ftlist SPECU4.20260305T000023_S_Sp0805+0417_zYJ_6s.fits[METADATA] col="JD-OBS,MJD-OBS,HJD-OBS,AIRMASS"
+
+# Python one-liner
+python3 - <<'EOF'
+from astropy.io import fits; from astropy.table import Table
+with fits.open('SPECU4.20260305T000023_S_Sp0805+0417_zYJ_6s.fits') as h:
+    t = Table(h['METADATA'].data)
+    print(t.colnames)
+    print(t['FILENAME', 'JD-OBS', 'MJD-OBS', 'HJD-OBS'])
+EOF
+```
+
+### Testing Checklist
+- [ ] METADATA table contains `JD-OBS`, `MJD-OBS`, `HJD-OBS` columns in every output cube
+- [ ] Auto-varying columns printed at cube creation time match expectations
+- [ ] Frames with missing `JD-OBS` / `MJD-OBS` / `HJD-OBS` store `NaN` (not crash)
+- [ ] No duplication of keywords between PRIMARY header and METADATA columns
+- [ ] Output file size increase is within expected range
 - Cron job structure compatible
 
 ### Migration Support
