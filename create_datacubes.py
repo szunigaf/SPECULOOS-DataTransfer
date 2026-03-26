@@ -630,7 +630,17 @@ def create_datacube(file_list, image_type, group_key, output_path):
     # header string.  We write that, then stream zeros to disk in 50-frame
     # chunks to fill the data block, then pad to the FITS block boundary.
     # The BinTable HDU is appended afterwards via astropy (tiny allocation).
-    fits_dtype   = np.dtype(cube_dtype).newbyteorder('>')
+    #
+    # FITS BITPIX=16 always means signed int16 on disk.  For the standard
+    # uint16 encoding trick (BZERO=32768), physical uint16 values are stored
+    # as (uint16 - 32768) in signed int16.  The reader then applies
+    # physical = stored_int16 + BZERO to recover the original counts.
+    # Using >u2 here would store raw uint16 bits that FITS readers misinterpret
+    # as int16 before adding BZERO, producing values offset by ±65536.
+    if np.dtype(cube_dtype) == np.dtype('uint16'):
+        fits_dtype = np.dtype('>i2')   # signed int16 on disk; BZERO=32768 stays in header
+    else:
+        fits_dtype = np.dtype(cube_dtype).newbyteorder('>')
     frame_nbytes = ny * nx * fits_dtype.itemsize
     total_data_bytes = n_frames * frame_nbytes
     data_padding = (2880 - total_data_bytes % 2880) % 2880
@@ -665,11 +675,18 @@ def create_datacube(file_list, image_type, group_key, output_path):
 
     mm = np.memmap(output_path, dtype=fits_dtype, mode='r+',
                    offset=data_offset, shape=(n_frames, ny, nx))
+    _is_uint16 = np.dtype(cube_dtype) == np.dtype('uint16')
     for i, fpath in enumerate(valid_files):
         try:
             with fits.open(fpath, memmap=False) as hdul:
-                frame = hdul[0].data
-            mm[i] = frame.astype(fits_dtype)
+                frame = hdul[0].data   # uint16 after astropy auto-scaling (BZERO applied)
+            if _is_uint16:
+                # Re-apply the FITS int16+BZERO encoding:
+                # stored_int16 = physical_uint16 - BZERO (32768)
+                # Reader recovers: stored_int16 + BZERO = original uint16
+                mm[i] = (frame.astype(np.int32) - 32768).astype(np.int16)
+            else:
+                mm[i] = frame.astype(fits_dtype)
             del frame
         except Exception as e:
             print(f"    Error re-reading {os.path.basename(fpath)}: {e}")
