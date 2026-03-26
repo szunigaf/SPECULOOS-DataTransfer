@@ -52,6 +52,13 @@ Each output FITS file contains two extensions:
                     FILTER    Filter name
                     OBJECT    Target name
                     AIRMASS   Airmass at observation
+                    JD-OBS    Julian Date at start of exposure (always present)
+                    MJD-OBS   Modified Julian Date at start of exposure (always present)
+                    HJD-OBS   Heliocentric Julian Date (always present)
+                    + one extra column for every header keyword (≤8 chars,
+                      non-HIERARCH) whose value varies across frames,
+                      e.g. CCD-TEMP, ALTITUDE, FOCUSPOS, …
+                    No extra I/O: headers are already read in Pass 1.
 
 Header compatibility
 --------------------
@@ -333,6 +340,8 @@ def create_datacube(file_list, image_type, group_key, output_path):
 
     # --- Pass 1: headers only — no pixel data loaded -------------------------
     filenames, dates, exptimes, filters_, objects_, airmasses = [], [], [], [], [], []
+    jdobs, mjdobs, hjdobs = [], [], []   # always-present time columns
+    all_headers_list = []     # full header per valid frame (headers only, ~5-15 KB each)
     valid_files = []          # filepaths that passed shape check
     ref_header  = None
     ny = nx = None
@@ -373,6 +382,10 @@ def create_datacube(file_list, image_type, group_key, output_path):
         filters_.append(str(header.get('FILTER', '')))
         objects_.append(str(header.get('OBJECT', '')))
         airmasses.append(float(header.get('AIRMASS', 0) or 0))
+        jdobs.append(float(header.get('JD-OBS',  np.nan) or np.nan))
+        mjdobs.append(float(header.get('MJD-OBS', np.nan) or np.nan))
+        hjdobs.append(float(header.get('HJD-OBS', np.nan) or np.nan))
+        all_headers_list.append(header)
 
     if skipped_shape > 0:
         print(f"    Warning: {skipped_shape} frame(s) skipped due to shape mismatch "
@@ -382,14 +395,18 @@ def create_datacube(file_list, image_type, group_key, output_path):
         return False, '', ''
 
     # Sort chronologically by DATE-OBS (no pixel data in RAM at all)
-    order       = sorted(range(len(dates)), key=lambda i: dates[i])
-    valid_files = [valid_files[i] for i in order]
-    filenames   = [filenames[i]   for i in order]
-    dates       = [dates[i]       for i in order]
-    exptimes    = [exptimes[i]    for i in order]
-    filters_    = [filters_[i]    for i in order]
-    objects_    = [objects_[i]    for i in order]
-    airmasses   = [airmasses[i]   for i in order]
+    order            = sorted(range(len(dates)), key=lambda i: dates[i])
+    valid_files      = [valid_files[i]      for i in order]
+    filenames        = [filenames[i]        for i in order]
+    dates            = [dates[i]            for i in order]
+    exptimes         = [exptimes[i]         for i in order]
+    filters_         = [filters_[i]         for i in order]
+    objects_         = [objects_[i]         for i in order]
+    airmasses        = [airmasses[i]        for i in order]
+    jdobs            = [jdobs[i]            for i in order]
+    mjdobs           = [mjdobs[i]           for i in order]
+    hjdobs           = [hjdobs[i]           for i in order]
+    all_headers_list = [all_headers_list[i] for i in order]
 
     n_frames = len(valid_files)
 
@@ -541,6 +558,45 @@ def create_datacube(file_list, image_type, group_key, output_path):
     h['CUBEKEY']  = (group_key,          'Grouping key')
     h['COMMENT']  = 'Datacube created by create_datacubes.py'
 
+    # --- Find per-frame varying keywords -----------------------------------
+    # Any keyword whose value differs across frames is stored as an extra
+    # column.  Structural keywords (NAXIS*, BITPIX, …) and the six dedicated
+    # columns are skipped.  HIERARCH keywords (names > 8 chars) are excluded
+    # to stay within standard FITS BinTable column-name limits.
+    # No extra I/O: all headers were already read in Pass 1 (header-only
+    # opens, ~2880 bytes each).  Memory cost: ~5-15 KB × N_frames.
+    _META_SKIP = frozenset({
+        'SIMPLE', 'BITPIX', 'NAXIS', 'NAXIS1', 'NAXIS2', 'EXTEND',
+        'END', '', 'COMMENT', 'HISTORY',
+        # Already stored as dedicated columns:
+        'DATE-OBS', 'EXPTIME', 'FILTER', 'OBJECT', 'AIRMASS',
+        'JD-OBS', 'MJD-OBS', 'HJD-OBS',   # always-present time columns
+    })
+    _candidate_kws = []
+    _seen_kws = set()
+    for _hdr in all_headers_list:
+        for _card in _hdr.cards:
+            _kw = _card.keyword
+            if _kw in _seen_kws or _kw in _META_SKIP:
+                continue
+            if len(_kw) > 8 or not _kw:   # skip HIERARCH / blank
+                continue
+            _seen_kws.add(_kw)
+            _candidate_kws.append(_kw)
+
+    _extra_cols = {}
+    for _kw in _candidate_kws:
+        _vals = [_hdr.get(_kw, None) for _hdr in all_headers_list]
+        _str_vals = [str(v) if v is not None else '' for v in _vals]
+        if len(set(_str_vals)) <= 1:   # same value in every frame — skip
+            continue
+        # Store as float64 if all values are numeric, else as string
+        try:
+            _extra_cols[_kw] = [float(v) if v is not None else np.nan
+                                 for v in _vals]
+        except (ValueError, TypeError):
+            _extra_cols[_kw] = _str_vals
+
     # Metadata table HDU
     meta_table = Table({
         'FILENAME': filenames,
@@ -549,7 +605,14 @@ def create_datacube(file_list, image_type, group_key, output_path):
         'FILTER':   filters_,
         'OBJECT':   objects_,
         'AIRMASS':  airmasses,
+        'JD-OBS':   jdobs,     # Julian Date — always preserved
+        'MJD-OBS':  mjdobs,    # Modified Julian Date — always preserved
+        'HJD-OBS':  hjdobs,    # Heliocentric Julian Date — always preserved
+        **_extra_cols,
     })
+    if _extra_cols:
+        print(f"    + METADATA extra columns ({len(_extra_cols)}): "
+              f"{', '.join(_extra_cols)}")
     table_hdu = fits.BinTableHDU(meta_table, name='METADATA')
 
     # DATE = file-write timestamp, set just before writeto so it is meaningful.
