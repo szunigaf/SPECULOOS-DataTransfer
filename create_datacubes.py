@@ -423,6 +423,17 @@ def create_datacube(file_list, image_type, group_key, output_path):
     h['NAXIS2'] = ny
     h['NAXIS3'] = n_frames
 
+    # --- Re-assert BZERO / BSCALE --------------------------------------------
+    # fits.PrimaryHDU(data=None, ...) silently drops BZERO and BSCALE because
+    # with no data array astropy considers them irrelevant.  For the standard
+    # FITS uint16 encoding (BITPIX=16 + BZERO=32768 + BSCALE=1) they MUST be
+    # present so readers can recover physical pixel values:
+    #   physical = stored_int16 * BSCALE + BZERO  →  stored_int16 + 32768
+    # Without these keywords every pixel would be misread by 32768 counts.
+    if np.dtype(cube_dtype) == np.dtype('uint16'):
+        h['BZERO']  = (32768, 'Offset for unsigned 16-bit integers')
+        h['BSCALE'] = (1,     'Scale factor for pixel values')
+
     # --- Re-anchor NAXISi to the mandatory FITS positions --------------------
     # fits.PrimaryHDU(data=None) creates a NAXIS=0 header (no NAXISi cards).
     # Assigning h['NAXIS1']/h['NAXIS2']/h['NAXIS3'] therefore APPENDS them at
